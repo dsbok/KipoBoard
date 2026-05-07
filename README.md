@@ -2,6 +2,15 @@
 
 Simple Pinterest image search proxy written in Go.
 
+## Instance
+
+https://dinterest.daniisaahir.com
+
+## Screenshot
+
+<img width="1888" height="912" alt="image" src="https://github.com/user-attachments/assets/76e4999c-8ceb-4ede-96f3-b221ab290b46" />
+
+
 ## Run
 
 ```bash
