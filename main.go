@@ -519,7 +519,7 @@ No results found.
 
 
 func homeHandler(w http.ResponseWriter, r *http.Request) {
-	renderHeader(w, "Binternet")
+	renderHeader(w, "dinterest")
 
 	fmt.Fprint(w, `
 
