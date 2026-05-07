@@ -4,11 +4,17 @@ FROM golang:1.24-alpine AS builder
 
 WORKDIR /app
 
+RUN apk add --no-cache ca-certificates
+
 COPY . .
 
-RUN go build -o dinterest .
+RUN go mod tidy
+
+RUN go build -v -o dinterest .
 
 FROM alpine:latest
+
+RUN apk add --no-cache ca-certificates
 
 WORKDIR /app
 
