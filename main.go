@@ -11,7 +11,6 @@ import (
 	"time"
 )
 
-
 type SearchResult struct {
 	Images    []string `json:"images"`
 	Bookmark  string   `json:"bookmark"`
@@ -279,7 +278,6 @@ func performSearch(
 	return result, nil
 }
 
-
 func imageProxyHandler(w http.ResponseWriter, r *http.Request) {
 	rawURL := r.URL.Query().Get("url")
 
@@ -319,7 +317,6 @@ func imageProxyHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write(image)
 }
 
-
 func apiHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
@@ -353,7 +350,6 @@ func apiHandler(w http.ResponseWriter, r *http.Request) {
 
 	json.NewEncoder(w).Encode(result)
 }
-
 
 func searchHandler(w http.ResponseWriter, r *http.Request) {
 	query :=
@@ -474,7 +470,6 @@ No results found.
 </center>`)
 	}
 
-
 	if result != nil &&
 		result.Bookmark != "" {
 
@@ -516,7 +511,6 @@ No results found.
 		renderFooter(w, []string{})
 	}
 }
-
 
 func homeHandler(w http.ResponseWriter, r *http.Request) {
 	renderHeader(w, "dinterest")
