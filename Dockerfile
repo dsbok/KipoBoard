@@ -6,13 +6,11 @@ WORKDIR /app
 
 RUN apk add --no-cache ca-certificates
 
-COPY go.mod go.sum ./
-
-RUN go mod download
+COPY go.mod ./
 
 COPY . .
 
-RUN CGO_ENABLED=0 go build -ldflags="-s -w" -o binternet .
+RUN CGO_ENABLED=0 go build -ldflags="-s -w" -o dinterest .
 
 FROM alpine:latest
 
@@ -20,8 +18,8 @@ RUN apk add --no-cache ca-certificates
 
 WORKDIR /app
 
-COPY --from=builder /app/binternet .
+COPY --from=builder /app/dinterest .
 
 EXPOSE 5003
 
-CMD ["./binternet"]
+CMD ["./dinterest"]
