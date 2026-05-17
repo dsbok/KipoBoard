@@ -8,8 +8,6 @@ RUN apk add --no-cache ca-certificates
 
 COPY . .
 
-RUN go mod tidy
-
 RUN go build -v -o dinterest .
 
 FROM alpine:latest
