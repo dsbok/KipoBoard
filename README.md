@@ -1,20 +1,16 @@
 # dinterest
 
-Simple Pinterest image search proxy written in Go.
+Simple Pinterest image search proxy written in Python.
 
 ## Instance
 
 https://dinterest.daniisaahir.com
 
-## Screenshot
-
-<img width="1888" height="912" alt="image" src="https://github.com/user-attachments/assets/76e4999c-8ceb-4ede-96f3-b221ab290b46" />
-
-
 ## Run
 
 ```bash
-go run main.go
+pip install -r requirements.txt
+python3 main.py
 ```
 
 Runs on:
