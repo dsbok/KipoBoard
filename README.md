@@ -1,25 +1,29 @@
 # dinterest
 
-Simple Pinterest image search proxy written in Python.
+Simple Pinterest image search proxy built with Python.
 
-## Instance
+## Demo
 
 https://dinterest.daniisaahir.com
 
-## Run with Python
+## Run Locally
 
 ```bash
 pip install -r requirements.txt
 python3 main.py
 ```
 
-Runs on:
+Open:
 http://localhost:5003
 
-## Docker Run
+## Docker
 
 ```bash
-docker run -d --name dinterest --restart unless-stopped -p 5003:5003 ghcr.io/dsbok/dinterest:latest
+docker run -d \
+  --name dinterest \
+  --restart unless-stopped \
+  -p 5003:5003 \
+  ghcr.io/dsbok/dinterest:latest
 ```
 
 ## Docker Compose
@@ -28,7 +32,6 @@ docker run -d --name dinterest --restart unless-stopped -p 5003:5003 ghcr.io/dsb
 services:
   dinterest:
     image: ghcr.io/dsbok/dinterest:latest
-    container_name: dinterest
     restart: unless-stopped
     ports:
       - "5003:5003"
