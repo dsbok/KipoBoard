@@ -11,19 +11,15 @@ from fastapi.responses import HTMLResponse, StreamingResponse
 from jinja2 import DictLoader, Environment
 from pydantic import BaseModel
 
-# ==========================================
-# Configuration & Setup
-# ==========================================
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
-logger = logging.getLogger("dinterest")
+logger = logging.getLogger("kipoboard")
 
 ALLOWED_DOMAINS = {"pinimg.com", "i.pinimg.com", "pinterest.com"}
 PINTEREST_BASE_URL = "https://www.pinterest.com/resource/BaseSearchResource/get/"
 
-# Global HTTP client for connection pooling
 http_client: httpx.AsyncClient = None
 
 
@@ -35,21 +31,15 @@ async def lifespan(app: FastAPI):
     await http_client.aclose()
 
 
-app = FastAPI(title="Dinterest Proxy", lifespan=lifespan)
+app = FastAPI(title="KipoBoard Proxy", lifespan=lifespan)
 
 
-# ==========================================
-# Models
-# ==========================================
 class SearchResult(BaseModel):
     images: List[str]
     bookmark: str
     csrftoken: Optional[str] = None
 
 
-# ==========================================
-# Templating (Jinja2 In-Memory)
-# ==========================================
 template_loader = DictLoader(
     {
         "base.html": """
@@ -60,7 +50,6 @@ template_loader = DictLoader(
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <style>
-            /* Native Browser Theming & Typography */
             :root {
                 color-scheme: light dark;
                 font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
@@ -81,7 +70,6 @@ template_loader = DictLoader(
             hr { border: 0; border-top: 1px solid var(--Field-border, #888); margin: 1.5rem auto; width: 100%; opacity: 0.3; }
             h1 { margin-bottom: 0.2rem; }
             
-            /* Native Form Styling */
             form { margin: 1rem 0; }
             input[type="text"], input[type="submit"] {
                 padding: 0.6rem 1rem;
@@ -92,7 +80,6 @@ template_loader = DictLoader(
             input[type="text"] { width: 300px; max-width: 60vw; }
             input[type="submit"] { cursor: pointer; font-weight: bold; }
             
-            /* Native CSS Masonry Layout */
             .masonry {
                 column-count: 1;
                 column-gap: 1rem;
@@ -116,7 +103,7 @@ template_loader = DictLoader(
                 width: 100%;
                 display: block;
                 height: auto;
-                background-color: #88888822; /* Placeholder color while loading */
+                background-color: #88888822;
             }
             
             .indicator { margin: 2rem 0; font-style: italic; opacity: 0.6; }
@@ -124,7 +111,7 @@ template_loader = DictLoader(
     </head>
     <body>
         <header>
-            <h1>dinterest</h1>
+            <h1>KipoBoard</h1>
             <p style="opacity: 0.8; margin-top: 0;">Minimal Pinterest proxy</p>
         </header>
         
@@ -134,7 +121,7 @@ template_loader = DictLoader(
         
         <footer>
             <hr>
-            <p><small><a href="https://github.com/dsbok/dinterest/" target="_blank">View Source</a></small></p>
+            <p><small><a href="https://github.com/dsbok/kipoboard/" target="_blank">View Source</a></small></p>
         </footer>
     </body>
     </html>
@@ -250,9 +237,6 @@ template_loader = DictLoader(
 jinja_env = Environment(loader=template_loader, autoescape=True)
 
 
-# ==========================================
-# Core Logic
-# ==========================================
 def is_allowed_domain(raw_url: str) -> bool:
     try:
         parsed = urlparse(raw_url)
@@ -294,7 +278,6 @@ async def perform_search(
         headers["Cookie"] = f"csrftoken={csrftoken}"
 
     try:
-        # Use the global HTTPX client established during lifespan
         resp = await http_client.get(search_url, headers=headers)
         resp.raise_for_status()
     except httpx.RequestError as e:
@@ -329,13 +312,10 @@ async def perform_search(
     return result
 
 
-# ==========================================
-# Routes
-# ==========================================
 @app.get("/", response_class=HTMLResponse)
 async def home_handler():
     template = jinja_env.get_template("home.html")
-    return template.render(title="dinterest")
+    return template.render(title="KipoBoard")
 
 
 @app.get("/search", response_class=HTMLResponse)
@@ -351,7 +331,7 @@ async def search_handler(
         result = None
 
     template = jinja_env.get_template("search.html")
-    return template.render(title=f"{q} - dinterest", query=q, results=result)
+    return template.render(title=f"{q} - KipoBoard", query=q, results=result)
 
 
 @app.get("/api", response_model=SearchResult)
@@ -370,7 +350,6 @@ async def image_proxy_handler(url: str = Query(...)):
         raise HTTPException(status_code=403, detail="Forbidden domain")
 
     async def stream_image():
-        # Keep isolated client for streaming so slow downloads don't exhaust the main pool
         async with httpx.AsyncClient(timeout=30.0) as client:
             async with client.stream(
                 "GET", url, headers={"User-Agent": "Mozilla/5.0"}
@@ -384,11 +363,8 @@ async def image_proxy_handler(url: str = Query(...)):
     return StreamingResponse(stream_image(), media_type="image/jpeg")
 
 
-# ==========================================
-# Entry Point
-# ==========================================
 if __name__ == "__main__":
     import uvicorn
 
-    logger.info("Starting Dinterest on port 5003...")
+    logger.info("Starting KipoBoard on port 5003...")
     uvicorn.run("main:app", host="0.0.0.0", port=5003, log_level="info", reload=True)
