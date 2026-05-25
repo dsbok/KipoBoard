@@ -4,11 +4,10 @@ on:
   push:
     branches:
       - main
-
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
   packages: write
 
 env:
@@ -21,6 +20,25 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          # Required for the auto-commit action to push changes
+          fetch-depth: 0 
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Format code with Black
+        run: |
+          pip install black
+          black .
+
+      - name: Commit formatted code
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "style: auto-format python code with black"
+          commit_options: '--no-verify'
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -41,7 +59,8 @@ jobs:
         with:
           images: ${{ env.IMAGE_NAME }}
           tags: |
-            type=raw,value=latest
+            type=ref,event=branch
+            type=raw,value=latest,enable={{is_default_branch}}
             type=sha
 
       - name: Build and push multi-arch image
