@@ -26,6 +26,7 @@ PINTEREST_BASE_URL = "https://www.pinterest.com/resource/BaseSearchResource/get/
 # Global HTTP client for connection pooling
 http_client: httpx.AsyncClient = None
 
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global http_client
@@ -33,7 +34,9 @@ async def lifespan(app: FastAPI):
     yield
     await http_client.aclose()
 
+
 app = FastAPI(title="Dinterest Proxy", lifespan=lifespan)
+
 
 # ==========================================
 # Models
@@ -43,11 +46,13 @@ class SearchResult(BaseModel):
     bookmark: str
     csrftoken: Optional[str] = None
 
+
 # ==========================================
 # Templating (Jinja2 In-Memory)
 # ==========================================
-template_loader = DictLoader({
-    "base.html": """
+template_loader = DictLoader(
+    {
+        "base.html": """
     <!DOCTYPE html>
     <html lang="en">
     <head>
@@ -134,7 +139,7 @@ template_loader = DictLoader({
     </body>
     </html>
     """,
-    "home.html": """
+        "home.html": """
     {% extends "base.html" %}
     {% block content %}
     <div style="margin-top: 10vh;">
@@ -145,7 +150,7 @@ template_loader = DictLoader({
     </div>
     {% endblock %}
     """,
-    "search.html": """
+        "search.html": """
     {% extends "base.html" %}
     {% block content %}
     <div>
@@ -239,9 +244,11 @@ template_loader = DictLoader({
         }
     </script>
     {% endblock %}
-    """
-})
+    """,
+    }
+)
 jinja_env = Environment(loader=template_loader, autoescape=True)
+
 
 # ==========================================
 # Core Logic
@@ -252,9 +259,12 @@ def is_allowed_domain(raw_url: str) -> bool:
         host = parsed.hostname
         if not host:
             return False
-        return any(host == domain or host.endswith(f".{domain}") for domain in ALLOWED_DOMAINS)
+        return any(
+            host == domain or host.endswith(f".{domain}") for domain in ALLOWED_DOMAINS
+        )
     except Exception:
         return False
+
 
 async def perform_search(
     query: str, bookmark: str = "", csrftoken: str = ""
@@ -290,7 +300,7 @@ async def perform_search(
     except httpx.RequestError as e:
         logger.error(f"Request failed: {e}")
         raise HTTPException(status_code=500, detail="Search request failed")
-    
+
     new_csrftoken = resp.cookies.get("csrftoken", csrftoken)
     raw_data = resp.json()
 
@@ -310,13 +320,14 @@ async def perform_search(
     resource = raw_data.get("resource") or {}
     resource_options = resource.get("options") or {}
     bookmarks = resource_options.get("bookmarks") or []
-    
+
     if bookmarks and isinstance(bookmarks[0], str):
         result.bookmark = bookmarks[0]
     elif resource_response.get("bookmark"):
         result.bookmark = resource_response.get("bookmark")
 
     return result
+
 
 # ==========================================
 # Routes
@@ -331,7 +342,7 @@ async def home_handler():
 async def search_handler(
     q: str = Query(..., min_length=1, max_length=64),
     bookmark: str = "",
-    csrftoken: str = ""
+    csrftoken: str = "",
 ):
     try:
         result = await perform_search(q, bookmark, csrftoken)
@@ -340,18 +351,12 @@ async def search_handler(
         result = None
 
     template = jinja_env.get_template("search.html")
-    return template.render(
-        title=f"{q} - dinterest",
-        query=q,
-        results=result
-    )
+    return template.render(title=f"{q} - dinterest", query=q, results=result)
 
 
 @app.get("/api", response_model=SearchResult)
 async def api_handler(
-    q: str = Query(..., min_length=1),
-    bookmark: str = "",
-    csrftoken: str = ""
+    q: str = Query(..., min_length=1), bookmark: str = "", csrftoken: str = ""
 ):
     try:
         return await perform_search(q, bookmark, csrftoken)
@@ -367,7 +372,9 @@ async def image_proxy_handler(url: str = Query(...)):
     async def stream_image():
         # Keep isolated client for streaming so slow downloads don't exhaust the main pool
         async with httpx.AsyncClient(timeout=30.0) as client:
-            async with client.stream("GET", url, headers={"User-Agent": "Mozilla/5.0"}) as response:
+            async with client.stream(
+                "GET", url, headers={"User-Agent": "Mozilla/5.0"}
+            ) as response:
                 if response.status_code != 200:
                     yield b""
                     return
@@ -376,10 +383,12 @@ async def image_proxy_handler(url: str = Query(...)):
 
     return StreamingResponse(stream_image(), media_type="image/jpeg")
 
+
 # ==========================================
 # Entry Point
 # ==========================================
 if __name__ == "__main__":
     import uvicorn
+
     logger.info("Starting Dinterest on port 5003...")
     uvicorn.run("main:app", host="0.0.0.0", port=5003, log_level="info", reload=True)
