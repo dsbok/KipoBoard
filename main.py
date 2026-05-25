@@ -1,6 +1,7 @@
 import json
 import logging
 import urllib.parse
+from contextlib import asynccontextmanager
 from typing import List, Optional
 from urllib.parse import urlparse
 
@@ -19,10 +20,20 @@ logging.basicConfig(
 )
 logger = logging.getLogger("dinterest")
 
-app = FastAPI(title="Dinterest Proxy")
-
 ALLOWED_DOMAINS = {"pinimg.com", "i.pinimg.com", "pinterest.com"}
 PINTEREST_BASE_URL = "https://www.pinterest.com/resource/BaseSearchResource/get/"
+
+# Global HTTP client for connection pooling
+http_client: httpx.AsyncClient = None
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    global http_client
+    http_client = httpx.AsyncClient(timeout=30.0)
+    yield
+    await http_client.aclose()
+
+app = FastAPI(title="Dinterest Proxy", lifespan=lifespan)
 
 # ==========================================
 # Models
@@ -38,111 +49,87 @@ class SearchResult(BaseModel):
 template_loader = DictLoader({
     "base.html": """
     <!DOCTYPE html>
-    <html>
+    <html lang="en">
     <head>
         <title>{{ title }}</title>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <style>
+            /* Native Browser Theming & Typography */
+            :root {
+                color-scheme: light dark;
+                font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+            }
             body {
-                background-color: #121212;
-                color: #e0e0e0;
-                font-family: Arial, sans-serif;
                 margin: 0;
-                padding: 20px;
+                padding: 1rem;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
             }
-            header, footer {
-                text-align: center;
-                max-width: 800px;
-                margin: 0 auto;
-            }
-            a { color: #bb86fc; text-decoration: none; }
-            a:hover { text-decoration: underline; }
-            hr { border: 0; border-top: 1px solid #333; margin: 20px auto; width: 80%; }
-            h1 { margin-bottom: 5px; }
-            
-            /* Form Styling */
-            input[type="text"] {
-                background-color: #2c2c2c;
-                color: #ffffff;
-                border: 1px solid #444;
-                padding: 10px;
-                border-radius: 4px;
-                font-size: 16px;
-                width: 300px;
-                max-width: 100%;
-            }
-            input[type="submit"] {
-                background-color: #3700b3;
-                color: #ffffff;
-                border: none;
-                padding: 10px 20px;
-                border-radius: 4px;
-                font-size: 16px;
-                cursor: pointer;
-                transition: background-color 0.2s;
-            }
-            input[type="submit"]:hover {
-                background-color: #6200ea;
-            }
-            
-            /* Responsive Grid Styling for 4-5 images per row */
-            .grid-container {
-                display: grid;
-                grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-                gap: 15px;
-                padding: 20px;
-                max-width: 1400px;
-                margin: 0 auto;
-            }
-            
-            .grid-item {
-                display: block;
-                overflow: hidden;
-                border: 1px solid #333;
-                border-radius: 8px;
-                background-color: #1e1e1e;
-                transition: transform 0.2s, border-color 0.2s;
-            }
-            
-            .grid-item:hover {
-                transform: scale(1.02);
-                border-color: #bb86fc;
-            }
-            
-            .grid-item img {
+            header, footer, main {
                 width: 100%;
-                height: 250px;
-                object-fit: cover; /* Keeps images nicely cropped into standard dimensions */
+                max-width: 1400px;
+                text-align: center;
+            }
+            a { color: inherit; text-decoration: none; }
+            hr { border: 0; border-top: 1px solid var(--Field-border, #888); margin: 1.5rem auto; width: 100%; opacity: 0.3; }
+            h1 { margin-bottom: 0.2rem; }
+            
+            /* Native Form Styling */
+            form { margin: 1rem 0; }
+            input[type="text"], input[type="submit"] {
+                padding: 0.6rem 1rem;
+                font-size: 1rem;
+                border-radius: 6px;
+                border: 1px solid #88888888;
+            }
+            input[type="text"] { width: 300px; max-width: 60vw; }
+            input[type="submit"] { cursor: pointer; font-weight: bold; }
+            
+            /* Native CSS Masonry Layout */
+            .masonry {
+                column-count: 1;
+                column-gap: 1rem;
+                padding: 1rem 0;
+            }
+            @media (min-width: 600px) { .masonry { column-count: 2; } }
+            @media (min-width: 900px) { .masonry { column-count: 3; } }
+            @media (min-width: 1200px) { .masonry { column-count: 4; } }
+            @media (min-width: 1600px) { .masonry { column-count: 5; } }
+            
+            .masonry-item {
+                break-inside: avoid;
+                margin-bottom: 1rem;
+                border-radius: 8px;
+                overflow: hidden;
                 display: block;
+                transition: opacity 0.2s;
+            }
+            .masonry-item:hover { opacity: 0.85; }
+            .masonry-item img {
+                width: 100%;
+                display: block;
+                height: auto;
+                background-color: #88888822; /* Placeholder color while loading */
             }
             
-            .loading {
-                display: none;
-                color: #888;
-                font-style: italic;
-                margin: 20px 0;
-                text-align: center;
-            }
-            .no-results {
-                text-align: center;
-                grid-column: 1 / -1;
-                color: #888;
-            }
+            .indicator { margin: 2rem 0; font-style: italic; opacity: 0.6; }
         </style>
     </head>
     <body>
         <header>
             <h1>dinterest</h1>
-            <p>Simple Pinterest image search proxy</p>
-            <hr>
+            <p style="opacity: 0.8; margin-top: 0;">Minimal Pinterest proxy</p>
         </header>
         
-        {% block content %}{% endblock %}
+        <main>
+            {% block content %}{% endblock %}
+        </main>
         
         <footer>
             <hr>
-            <p><a href="https://github.com/dsbok/dinterest/" target="_blank">Source</a></p>
+            <p><small><a href="https://github.com/dsbok/dinterest/" target="_blank">View Source</a></small></p>
         </footer>
     </body>
     </html>
@@ -150,12 +137,10 @@ template_loader = DictLoader({
     "home.html": """
     {% extends "base.html" %}
     {% block content %}
-    <div style="text-align: center; margin-top: 50px;">
+    <div style="margin-top: 10vh;">
         <form method="get" action="/search" autocomplete="off">
-            <p>
-                <input type="text" name="q" required placeholder="Search images...">
-                <input type="submit" value="Search">
-            </p>
+            <input type="text" name="q" required placeholder="Search images..." autofocus>
+            <input type="submit" value="Search">
         </form>
     </div>
     {% endblock %}
@@ -163,7 +148,7 @@ template_loader = DictLoader({
     "search.html": """
     {% extends "base.html" %}
     {% block content %}
-    <div style="text-align: center;">
+    <div>
         <form method="get" action="/search" autocomplete="off">
             <input type="text" name="q" value="{{ query }}" required>
             <input type="submit" value="Search">
@@ -171,21 +156,22 @@ template_loader = DictLoader({
     </div>
     <hr>
     
-    <div id="image-grid" class="grid-container">
+    <div id="image-grid" class="masonry">
         {% if results and results.images %}
             {% for image in results.images %}
-                <a class="grid-item" href="/image_proxy?url={{ image | urlencode }}" target="_blank">
-                    <img src="/image_proxy?url={{ image | urlencode }}" loading="lazy">
+                <a class="masonry-item" href="/image_proxy?url={{ image | urlencode }}" target="_blank">
+                    <img src="/image_proxy?url={{ image | urlencode }}" loading="lazy" alt="Pin">
                 </a>
             {% endfor %}
         {% else %}
-            <p class="no-results">No results found.</p>
+            <p class="indicator">No results found.</p>
         {% endif %}
     </div>
 
-    <div id="loading" class="loading">Loading more images...</div>
+    {% if results and results.bookmark %}
+        <div id="sentinel" class="indicator">Loading more images...</div>
+    {% endif %}
 
-    <!-- Infinite Scroll Logic -->
     <script>
         let currentQuery = "{{ query }}";
         let currentBookmark = "{{ results.bookmark if results else '' }}";
@@ -193,18 +179,20 @@ template_loader = DictLoader({
         let isLoading = false;
         let hasMore = !!currentBookmark;
 
-        window.addEventListener('scroll', () => {
-            if (isLoading || !hasMore) return;
+        const sentinel = document.getElementById('sentinel');
+        
+        if (sentinel) {
+            const observer = new IntersectionObserver((entries) => {
+                if (entries[0].isIntersecting && !isLoading && hasMore) {
+                    loadMore();
+                }
+            }, { rootMargin: "800px" });
             
-            // Trigger load when within 800px of the bottom
-            if (window.innerHeight + window.scrollY >= document.body.offsetHeight - 800) {
-                loadMore();
-            }
-        });
+            observer.observe(sentinel);
+        }
 
         async function loadMore() {
             isLoading = true;
-            document.getElementById('loading').style.display = 'block';
 
             try {
                 const url = `/api?q=${encodeURIComponent(currentQuery)}&bookmark=${encodeURIComponent(currentBookmark)}&csrftoken=${encodeURIComponent(currentCsrf)}`;
@@ -217,7 +205,7 @@ template_loader = DictLoader({
                     const grid = document.getElementById('image-grid');
                     data.images.forEach(imgUrl => {
                         const a = document.createElement('a');
-                        a.className = 'grid-item';
+                        a.className = 'masonry-item';
                         
                         const proxyUrl = `/image_proxy?url=${encodeURIComponent(imgUrl)}`;
                         a.href = proxyUrl;
@@ -226,6 +214,7 @@ template_loader = DictLoader({
                         const img = document.createElement('img');
                         img.src = proxyUrl;
                         img.loading = 'lazy';
+                        img.alt = 'Pin';
                         
                         a.appendChild(img);
                         grid.appendChild(a);
@@ -236,12 +225,16 @@ template_loader = DictLoader({
                 currentCsrf = data.csrftoken || "";
                 hasMore = !!currentBookmark;
 
+                if (!hasMore && sentinel) {
+                    sentinel.textContent = "No more results.";
+                }
+
             } catch (e) {
                 console.error("Failed to load more images:", e);
                 hasMore = false; 
+                if (sentinel) sentinel.textContent = "Error loading more images.";
             } finally {
                 isLoading = false;
-                document.getElementById('loading').style.display = 'none';
             }
         }
     </script>
@@ -290,16 +283,16 @@ async def perform_search(
         headers["X-CSRFToken"] = csrftoken
         headers["Cookie"] = f"csrftoken={csrftoken}"
 
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        try:
-            resp = await client.get(search_url, headers=headers)
-            resp.raise_for_status()
-        except httpx.RequestError as e:
-            logger.error(f"Request failed: {e}")
-            raise HTTPException(status_code=500, detail="Search request failed")
-        
-        new_csrftoken = resp.cookies.get("csrftoken", csrftoken)
-        raw_data = resp.json()
+    try:
+        # Use the global HTTPX client established during lifespan
+        resp = await http_client.get(search_url, headers=headers)
+        resp.raise_for_status()
+    except httpx.RequestError as e:
+        logger.error(f"Request failed: {e}")
+        raise HTTPException(status_code=500, detail="Search request failed")
+    
+    new_csrftoken = resp.cookies.get("csrftoken", csrftoken)
+    raw_data = resp.json()
 
     result = SearchResult(images=[], bookmark="", csrftoken=new_csrftoken)
 
@@ -372,6 +365,7 @@ async def image_proxy_handler(url: str = Query(...)):
         raise HTTPException(status_code=403, detail="Forbidden domain")
 
     async def stream_image():
+        # Keep isolated client for streaming so slow downloads don't exhaust the main pool
         async with httpx.AsyncClient(timeout=30.0) as client:
             async with client.stream("GET", url, headers={"User-Agent": "Mozilla/5.0"}) as response:
                 if response.status_code != 200:
@@ -388,4 +382,4 @@ async def image_proxy_handler(url: str = Query(...)):
 if __name__ == "__main__":
     import uvicorn
     logger.info("Starting Dinterest on port 5003...")
-    uvicorn.run(app, host="0.0.0.0", port=5003, log_level="info")
+    uvicorn.run("main:app", host="0.0.0.0", port=5003, log_level="info", reload=True)
