@@ -21,17 +21,15 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0 
+          fetch-depth: 1
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
         with:
-          python-version: '3.x'
+          version: "latest"
 
       - name: Format code with Black
-        run: |
-          pip install black
-          black .
+        run: uvx black .
 
       - name: Commit formatted code
         uses: stefanzweifel/git-auto-commit-action@v5
@@ -74,3 +72,4 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          provenance: false
