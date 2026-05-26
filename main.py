@@ -8,18 +8,23 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 PORT = 5003
 ALLOWED_DOMAINS = {"pinimg.com", "i.pinimg.com", "pinterest.com"}
 
+
 @dataclass
 class SearchResult:
     images: list
     bookmark: str
     csrftoken: str = ""
 
+
 def is_allowed_domain(url: str) -> bool:
     try:
         host = urllib.parse.urlparse(url).hostname
-        return bool(host and any(host == d or host.endswith(f".{d}") for d in ALLOWED_DOMAINS))
+        return bool(
+            host and any(host == d or host.endswith(f".{d}") for d in ALLOWED_DOMAINS)
+        )
     except Exception:
         return False
+
 
 def perform_search(query: str, bookmark: str = "", csrftoken: str = "") -> SearchResult:
     options = {"query": query, "scope": "pins"}
@@ -53,7 +58,9 @@ def perform_search(query: str, bookmark: str = "", csrftoken: str = "") -> Searc
     images = []
     res_resp = resp_data.get("resource_response", {})
     for item in res_resp.get("data", {}).get("results", []):
-        if isinstance(item, dict) and (img_url := item.get("images", {}).get("orig", {}).get("url")):
+        if isinstance(item, dict) and (
+            img_url := item.get("images", {}).get("orig", {}).get("url")
+        ):
             images.append(img_url)
 
     bookmarks = resp_data.get("resource", {}).get("options", {}).get("bookmarks", [])
@@ -177,6 +184,7 @@ HTML_TEMPLATE = """
 </html>
 """
 
+
 class KipoBoardHandler(BaseHTTPRequestHandler):
     def log_message(self, format, *args):
         pass
@@ -198,18 +206,39 @@ class KipoBoardHandler(BaseHTTPRequestHandler):
         params = {k: v[0] for k, v in urllib.parse.parse_qs(parsed.query).items()}
 
         if path == "/":
-            self.respond(200, HTML_TEMPLATE.format(query="", images_html="", sentinel_text="", bookmark="", csrf=""))
-        
+            self.respond(
+                200,
+                HTML_TEMPLATE.format(
+                    query="", images_html="", sentinel_text="", bookmark="", csrf=""
+                ),
+            )
+
         elif path == "/search":
             q = params.get("q", "")
             if not q:
                 return self.respond(400, "Missing query")
-            
+
             try:
                 res = perform_search(q)
-                imgs = "".join(f'<a class="item" href="/image_proxy?url={urllib.parse.quote(img)}" target="_blank"><img src="/image_proxy?url={urllib.parse.quote(img)}" loading="lazy"></a>' for img in res.images)
-                sentinel = "Loading..." if res.bookmark else ("No results." if not res.images else "")
-                self.respond(200, HTML_TEMPLATE.format(query=q.replace('"', '&quot;'), images_html=imgs, sentinel_text=sentinel, bookmark=res.bookmark, csrf=res.csrftoken))
+                imgs = "".join(
+                    f'<a class="item" href="/image_proxy?url={urllib.parse.quote(img)}" target="_blank"><img src="/image_proxy?url={urllib.parse.quote(img)}" loading="lazy"></a>'
+                    for img in res.images
+                )
+                sentinel = (
+                    "Loading..."
+                    if res.bookmark
+                    else ("No results." if not res.images else "")
+                )
+                self.respond(
+                    200,
+                    HTML_TEMPLATE.format(
+                        query=q.replace('"', "&quot;"),
+                        images_html=imgs,
+                        sentinel_text=sentinel,
+                        bookmark=res.bookmark,
+                        csrf=res.csrftoken,
+                    ),
+                )
             except Exception:
                 self.respond(500, "Search failed")
 
@@ -218,8 +247,20 @@ class KipoBoardHandler(BaseHTTPRequestHandler):
             if not q:
                 return self.respond(400, "Missing query")
             try:
-                res = perform_search(q, params.get("bookmark", ""), params.get("csrftoken", ""))
-                self.respond(200, json.dumps({"images": res.images, "bookmark": res.bookmark, "csrftoken": res.csrftoken}), "application/json")
+                res = perform_search(
+                    q, params.get("bookmark", ""), params.get("csrftoken", "")
+                )
+                self.respond(
+                    200,
+                    json.dumps(
+                        {
+                            "images": res.images,
+                            "bookmark": res.bookmark,
+                            "csrftoken": res.csrftoken,
+                        }
+                    ),
+                    "application/json",
+                )
             except Exception:
                 self.respond(500, '{"error": "Search failed"}', "application/json")
 
@@ -231,10 +272,13 @@ class KipoBoardHandler(BaseHTTPRequestHandler):
                 req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
                 with urllib.request.urlopen(req, timeout=30.0) as img_resp:
                     self.send_response(200)
-                    self.send_header("Content-type", img_resp.headers.get("Content-Type", "image/jpeg"))
+                    self.send_header(
+                        "Content-type",
+                        img_resp.headers.get("Content-Type", "image/jpeg"),
+                    )
                     self.send_header("Cache-Control", "public, max-age=86400")
                     self.end_headers()
-                    
+
                     try:
                         while chunk := img_resp.read(8192):
                             self.wfile.write(chunk)
@@ -244,6 +288,7 @@ class KipoBoardHandler(BaseHTTPRequestHandler):
                 self.respond(502, "Bad Gateway")
         else:
             self.respond(404, "Not Found")
+
 
 if __name__ == "__main__":
     server = ThreadingHTTPServer(("0.0.0.0", PORT), KipoBoardHandler)
