@@ -249,7 +249,7 @@ func performSearch(query, bookmark, csrfToken string) (SearchResult, error) {
 			}
 		}
 	}
-	
+
 	if newBookmark == "" && resResp != nil {
 		if bm, ok := resResp["bookmark"].(string); ok {
 			newBookmark = bm
@@ -314,7 +314,7 @@ func apiHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Missing query", http.StatusBadRequest)
 		return
 	}
-	
+
 	bookmark := r.URL.Query().Get("bookmark")
 	csrfToken := r.URL.Query().Get("csrftoken")
 
@@ -358,7 +358,7 @@ func proxyHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", contentType)
 	w.Header().Set("Cache-Control", "public, max-age=86400")
 	w.WriteHeader(http.StatusOK)
- 
+
 	io.Copy(w, resp.Body)
 }
 
