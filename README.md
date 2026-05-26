@@ -9,7 +9,7 @@ https://kipoboard.daniisaahir.com
 ## Run Locally
 
 ```bash
-python3 main.py
+go run main.go
 ```
 
 Open:
