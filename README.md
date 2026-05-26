@@ -1,6 +1,6 @@
 # KipoBoard
 
-Simple Pinterest image search proxy built with Python.
+Simple Pinterest image search proxy built with Go.
 
 ## Demo
 
@@ -9,7 +9,7 @@ https://kipoboard.daniisaahir.com
 ## Run Locally
 
 ```bash
-python3 main.py
+go run main.go
 ```
 
 Open:
