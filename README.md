@@ -9,7 +9,6 @@ https://kipoboard.daniisaahir.com
 ## Run Locally
 
 ```bash
-pip install -r requirements.txt
 python3 main.py
 ```
 
