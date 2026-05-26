@@ -1,6 +1,6 @@
 # KipoBoard
 
-Simple Pinterest image search proxy built with Python.
+Simple Pinterest image search proxy built with Go.
 
 ## Demo
 
