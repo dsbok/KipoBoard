@@ -32,6 +32,35 @@ type TemplateData struct {
 	CSRFToken    string
 }
 
+type pinterestRequest struct {
+	Options struct {
+		Query     string   `json:"query"`
+		Scope     string   `json:"scope"`
+		Bookmarks []string `json:"bookmarks,omitempty"`
+	} `json:"options"`
+	Context struct{} `json:"context"`
+}
+
+type pinterestResponse struct {
+	ResourceResponse struct {
+		Data struct {
+			Results []struct {
+				Images struct {
+					Orig struct {
+						URL string `json:"url"`
+					} `json:"orig"`
+				} `json:"images"`
+			} `json:"results"`
+		} `json:"data"`
+		Bookmark string `json:"bookmark"`
+	} `json:"resource_response"`
+	Resource struct {
+		Options struct {
+			Bookmarks []string `json:"bookmarks"`
+		} `json:"options"`
+	} `json:"resource"`
+}
+
 const htmlTemplateStr = `
 <!DOCTYPE html>
 <html lang="en">
@@ -73,30 +102,20 @@ const htmlTemplateStr = `
         const targetColWidth = 200; 
         const nCols = Math.max(3, Math.floor(window.innerWidth / targetColWidth));
         
-        const cols = [];
-        for(let i=0; i<nCols; i++) {
-            let c = document.createElement('div');
+        const cols = Array.from({ length: nCols }, () => {
+            const c = document.createElement('div');
             c.className = 'col';
             g.appendChild(c);
-            cols.push(c);
-        }
+            return c;
+        });
         
         function getShortestColIndex() {
-            let shortestIdx = 0;
-            let minHeight = cols[0].offsetHeight;
-            for (let i = 1; i < nCols; i++) {
-                if (cols[i].offsetHeight < minHeight) {
-                    minHeight = cols[i].offsetHeight;
-                    shortestIdx = i;
-                }
-            }
-            return shortestIdx;
+            return cols.reduce((minIdx, col, idx) => col.offsetHeight < cols[minIdx].offsetHeight ? idx : minIdx, 0);
         }
         
         let fallbackIdx = 0;
         function addItems(container) {
-            const items = Array.from(container.children);
-            items.forEach(item => {
+            Array.from(container.children).forEach(item => {
                 let targetCol = cols[getShortestColIndex()];
                 if (targetCol.offsetHeight === 0) {
                     targetCol = cols[fallbackIdx % nCols];
@@ -149,9 +168,6 @@ func isAllowedDomain(rawURL string) bool {
 		return false
 	}
 	host := u.Hostname()
-	if host == "" {
-		return false
-	}
 	for _, d := range allowedDomains {
 		if host == d || strings.HasSuffix(host, "."+d) {
 			return true
@@ -161,20 +177,14 @@ func isAllowedDomain(rawURL string) bool {
 }
 
 func performSearch(query, bookmark, csrfToken string) (SearchResult, error) {
-	options := map[string]interface{}{
-		"query": query,
-		"scope": "pins",
-	}
+	var reqPayload pinterestRequest
+	reqPayload.Options.Query = query
+	reqPayload.Options.Scope = "pins"
 	if bookmark != "" {
-		options["bookmarks"] = []string{bookmark}
+		reqPayload.Options.Bookmarks = []string{bookmark}
 	}
 
-	payloadMap := map[string]interface{}{
-		"options": options,
-		"context": map[string]interface{}{},
-	}
-
-	payloadBytes, err := json.Marshal(payloadMap)
+	payloadBytes, err := json.Marshal(reqPayload)
 	if err != nil {
 		return SearchResult{}, err
 	}
@@ -215,45 +225,24 @@ func performSearch(query, bookmark, csrfToken string) (SearchResult, error) {
 		}
 	}
 
-	var respData map[string]interface{}
-	if err := json.NewDecoder(resp.Body).Decode(&respData); err != nil {
+	var apiResp pinterestResponse
+	if err := json.NewDecoder(resp.Body).Decode(&apiResp); err != nil {
 		return SearchResult{}, err
 	}
 
 	var images []string
+	for _, res := range apiResp.ResourceResponse.Data.Results {
+		if imgURL := res.Images.Orig.URL; imgURL != "" {
+			images = append(images, imgURL)
+		}
+	}
+
 	var newBookmark string
-
-	resResp, _ := respData["resource_response"].(map[string]interface{})
-	if resResp != nil {
-		if dataMap, ok := resResp["data"].(map[string]interface{}); ok {
-			if results, ok := dataMap["results"].([]interface{}); ok {
-				for _, itemInf := range results {
-					if item, ok := itemInf.(map[string]interface{}); ok {
-						if imagesMap, ok := item["images"].(map[string]interface{}); ok {
-							if orig, ok := imagesMap["orig"].(map[string]interface{}); ok {
-								if imgURL, ok := orig["url"].(string); ok && imgURL != "" {
-									images = append(images, imgURL)
-								}
-							}
-						}
-					}
-				}
-			}
-		}
+	if len(apiResp.Resource.Options.Bookmarks) > 0 {
+		newBookmark = apiResp.Resource.Options.Bookmarks[0]
 	}
-
-	if resource, ok := respData["resource"].(map[string]interface{}); ok {
-		if opts, ok := resource["options"].(map[string]interface{}); ok {
-			if bookmarks, ok := opts["bookmarks"].([]interface{}); ok && len(bookmarks) > 0 {
-				newBookmark, _ = bookmarks[0].(string)
-			}
-		}
-	}
-
-	if newBookmark == "" && resResp != nil {
-		if bm, ok := resResp["bookmark"].(string); ok {
-			newBookmark = bm
-		}
+	if newBookmark == "" {
+		newBookmark = apiResp.ResourceResponse.Bookmark
 	}
 
 	return SearchResult{
