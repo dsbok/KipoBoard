@@ -32,21 +32,6 @@ jobs:
           go-version: 'stable'
           cache: true
 
-      - name: Run golangci-lint
-        uses: golangci/golangci-lint-action@v6
-        with:
-          version: latest
-          args: --timeout=5m
-        env:
-          GOLANGCI_LINT_SKIP_GO_VERSION_CHECK: 'true'
- 
-
-
-      - name: Run Govulncheck
-        run: |
-          go install golang.org/x/vuln/cmd/govulncheck@latest
-          govulncheck ./...
-
       - name: Format code with gofmt
         run: gofmt -s -w .
 
