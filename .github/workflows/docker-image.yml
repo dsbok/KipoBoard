@@ -37,7 +37,9 @@ jobs:
         with:
           version: latest
           args: --timeout=5m
-          skip-build-check: true 
+        env:
+          GOLANGCI_LINT_SKIP_GO_VERSION_CHECK: 'true'
+ 
 
 
       - name: Run Govulncheck
