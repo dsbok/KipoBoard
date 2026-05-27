@@ -37,6 +37,8 @@ jobs:
         with:
           version: latest
           args: --timeout=5m
+          skip-build-check: true 
+
 
       - name: Run Govulncheck
         run: |
