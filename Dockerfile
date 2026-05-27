@@ -2,17 +2,17 @@ FROM golang:1.22-alpine AS builder
 
 WORKDIR /app
 
-COPY main.go .
+COPY . .
 
-RUN CGO_ENABLED=0 GOOS=linux go build -o kipoboard main.go
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o kipoboard main.go
 
-FROM alpine:latest
-
-RUN apk --no-cache add ca-certificates
+FROM gcr.io/distroless/static-debian12:nonroot
 
 WORKDIR /app
 
 COPY --from=builder /app/kipoboard .
+
+USER nonroot:nonroot
 
 EXPOSE 5003
 
