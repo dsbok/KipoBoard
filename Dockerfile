@@ -1,19 +1,34 @@
-FROM golang:1.22-alpine AS builder
+FROM python:3.12-alpine AS builder
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
-COPY . .
+RUN python -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
 
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o kipoboard main.go
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir flask requests
 
-FROM gcr.io/distroless/static-debian12:nonroot
+FROM python:3.12-alpine
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PATH="/opt/venv/bin:$PATH"
+
+RUN addgroup -S nonroot && adduser -S nonroot -G nonroot
 
 WORKDIR /app
 
-COPY --from=builder /app/kipoboard .
+COPY --from=builder /opt/venv /opt/venv
+
+COPY main.py .
+
+RUN chown -R nonroot:nonroot /app
 
 USER nonroot:nonroot
 
-EXPOSE 5003
+EXPOSE 5005
 
-CMD ["./kipoboard"]
+CMD ["python", "main.py"]
