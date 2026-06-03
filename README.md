@@ -23,7 +23,7 @@ docker run -d \
   --name kipoboard \
   --restart unless-stopped \
   -p 5005:5005 \
-  ghcr.io/dsbok/kipoboard:latest
+  ghcr.io/dsbok/kipoboard:main
 ```
 
 ## Docker Compose
@@ -31,7 +31,7 @@ docker run -d \
 ```yaml
 services:
   kipoboard:
-    image: ghcr.io/dsbok/kipoboard:latest
+    image: ghcr.io/dsbok/kipoboard:main
     restart: unless-stopped
     ports:
       - "5005:5005"
