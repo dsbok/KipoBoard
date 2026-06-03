@@ -1,6 +1,6 @@
 # KipoBoard
 
-Simple Pinterest image search proxy built with Go.
+Simple Pinterest image search proxy.
 
 ## Demo
 
@@ -9,11 +9,12 @@ https://kipoboard.daniisaahir.com
 ## Run Locally
 
 ```bash
-go run main.go
+pip install -r requirements.txt
+python3 main.py
 ```
 
 Open:
-http://localhost:5003
+http://localhost:5005
 
 ## Docker
 
@@ -21,7 +22,7 @@ http://localhost:5003
 docker run -d \
   --name kipoboard \
   --restart unless-stopped \
-  -p 5003:5003 \
+  -p 5005:5005 \
   ghcr.io/dsbok/kipoboard:latest
 ```
 
@@ -33,5 +34,5 @@ services:
     image: ghcr.io/dsbok/kipoboard:latest
     restart: unless-stopped
     ports:
-      - "5003:5003"
+      - "5005:5005"
 ```
