@@ -183,8 +183,3 @@ def proxy():
         )
     except requests.RequestException:
         return "Bad Gateway", 502
-
-
-if __name__ == "__main__":
-    print("KipoBoard is running on http://localhost:5005")
-    app.run(host="0.0.0.0", port=5005)
