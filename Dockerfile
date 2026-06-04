@@ -9,7 +9,7 @@ RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
 RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir flask requests
+    pip install --no-cache-dir flask requests gunicorn
 
 FROM python:3.12-alpine
 
@@ -31,4 +31,4 @@ USER nonroot:nonroot
 
 EXPOSE 5005
 
-CMD ["python", "main.py"]
+CMD ["gunicorn", "--workers", "5", "--bind", "0.0.0.0:5005", "main:app"]
