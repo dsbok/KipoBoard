@@ -2,6 +2,3 @@
 .github
 Dockerfile
 README.md
-*.log
-bin/
-dist/
