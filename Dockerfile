@@ -8,8 +8,9 @@ WORKDIR /app
 RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
+COPY requirements.txt .
 RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir flask requests gunicorn
+    pip install --no-cache-dir -r requirements.txt
 
 FROM python:3.12-alpine
 
@@ -23,7 +24,7 @@ WORKDIR /app
 
 COPY --from=builder /opt/venv /opt/venv
 
-COPY main.py .
+COPY app.py .
 
 RUN chown -R nonroot:nonroot /app
 
@@ -31,4 +32,4 @@ USER nonroot:nonroot
 
 EXPOSE 5005
 
-CMD ["gunicorn", "--workers", "5", "--bind", "0.0.0.0:5005", "main:app"]
+CMD ["gunicorn", "--workers", "5", "--bind", "0.0.0.0:5005", "app:app"]
