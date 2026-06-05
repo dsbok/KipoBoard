@@ -10,7 +10,7 @@ https://kipoboard.daniisaahir.com
 
 ```bash
 pip install -r requirements.txt
-gunicorn --workers 5 --bind 0.0.0.0:5005 main:app
+gunicorn --workers 5 --bind 0.0.0.0:5005 app:app
 ```
 
 Open:
