@@ -24,7 +24,7 @@ HTML_TMPL = """<!DOCTYPE html>
 	</style>
 </head>
 <body>
-	<h2><a href="https://github.com/dsbok/kipoboard" style="text-decoration:none;" target="_blank">KipoBoard</a></h2>
+	<h2><a href="https://github.com/dsbok/KipoBoard" style="text-decoration:none;" target="_blank">KipoBoard</a></h2>
 	<form>
 		<input type="text" name="q" value="{{ Q }}" required placeholder="Search images..." autofocus> 
 		<input type="submit" value="Search">
