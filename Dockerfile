@@ -13,8 +13,8 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt && \
     pip uninstall -y pip setuptools wheel && \
-    find /opt/venv -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true && \
-    find /opt/venv -type f -name "*.py[co]" -delete 2>/dev/null || true
+    find /opt/venv -type d -name "__pycache__" -exec rm -rf {} + && \
+    find /opt/venv -type f -name "*.py[co]" -delete
 
 FROM python:3.12-alpine
 
