@@ -6,6 +6,10 @@ on:
       - '**'
   workflow_dispatch:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
   packages: write
@@ -13,9 +17,18 @@ permissions:
 jobs:
   docker:
     runs-on: ubuntu-latest
+    timeout-minutes: 20 
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Lint Dockerfile
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: Dockerfile
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -30,18 +43,15 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # New step to convert repository path to lowercase
-      - name: Lowercase repository name
-        id: repo_name
-        uses: ASzc/change-string-case-action@v5
-        with:
-          string: ${{ github.repository }}
+      - name: Set repository name to lowercase
+        run: |
+          echo "IMAGE_NAME=${GITHUB_REPOSITORY,,}" >> $GITHUB_ENV
 
       - name: Extract Docker metadata
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ghcr.io/${{ steps.repo_name.outputs.lowercase }}
+          images: ghcr.io/${{ env.IMAGE_NAME }}
           tags: |
             type=ref,event=branch
 
