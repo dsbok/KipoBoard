@@ -16,48 +16,56 @@ HTML_TMPL = """<!DOCTYPE html>
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
 	<style>
 		body { font-family: system-ui, sans-serif; margin: 0; padding: 1rem; text-align: center; background: #000; color: #fff; }
-		form { margin: 1.5rem 0; }
-		input[type="text"] { width: 300px; max-width: 80vw; padding: 4px; }
+		a { color: #fff; text-decoration: none; }
 		.masonry { display: flex; gap: 1rem; padding: 1rem 0; align-items: flex-start; }
 		.col { display: flex; flex-direction: column; gap: 1rem; flex: 1 1 0; min-width: 0; }
 		.item img { width: 100%; display: block; background: #111; min-height: 100px; object-fit: cover; border-radius: 4px; transition: opacity 0.2s ease; cursor: zoom-in; content-visibility: auto; }
 		.item img:hover { opacity: 0.8; }
-		a { color: #fff; }
-        .header-container { display: flex; justify-content: center; align-items: center; gap: 15px; flex-wrap: wrap; }
-        .fav-nav { background: #e0245e; color: #fff; border: none; padding: 8px 16px; border-radius: 20px; cursor: pointer; font-weight: bold; transition: background 0.2s; box-shadow: 0 4px 10px rgba(224,36,94,0.3); }
-        .fav-nav:hover { background: #c01b4b; }
-		#lightbox { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 1000; align-items: center; justify-content: center; flex-direction: column; cursor: zoom-out; backdrop-filter: blur(5px); }
-		#lightbox img { max-width: 90vw; max-height: 80vh; object-fit: contain; border-radius: 8px; box-shadow: 0 10px 30px rgba(0,0,0,0.7); }
+		
+		.btn, input[type="submit"] { background: #000; border: 1px solid #333; color: #fff; padding: 10px 20px; border-radius: 4px; cursor: pointer; transition: all 0.2s ease; font-family: inherit; font-size: 14px; text-decoration: none; display: inline-flex; align-items: center; justify-content: center; margin: 0; box-sizing: border-box; }
+		.btn:hover, input[type="submit"]:hover { background: #fff; color: #000; border-color: #fff; }
+		.btn.active { background: #fff; color: #000; border-color: #fff; }
+		
+		input[type="text"] { background: #000; border: 1px solid #333; color: #fff; padding: 10px 16px; border-radius: 4px; width: 300px; max-width: 100%; outline: none; font-family: inherit; font-size: 14px; transition: border-color 0.2s ease; box-sizing: border-box; }
+		input[type="text"]:focus { border-color: #fff; }
+		
+		.header-container { display: flex; flex-direction: column; align-items: center; gap: 1.5rem; margin: 1rem 0 2rem 0; }
+		.controls { display: flex; gap: 0.5rem; flex-wrap: wrap; justify-content: center; }
+		
+		#lightbox { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 1000; align-items: center; justify-content: center; flex-direction: column; cursor: zoom-out; backdrop-filter: blur(5px); }
+		#lightbox img { max-width: 90vw; max-height: 80vh; object-fit: contain; border-radius: 4px; }
 		#lightbox.active { display: flex; }
-        .lightbox-actions { display: flex; gap: 10px; margin-top: 20px; flex-wrap: wrap; justify-content: center; }
-        .action-btn { padding: 10px 20px; background: #fff; color: #000; text-decoration: none; border: none; border-radius: 20px; font-weight: bold; cursor: pointer; transition: background 0.2s; box-shadow: 0 4px 10px rgba(0,0,0,0.5); font-size: 14px; font-family: inherit; }
-        .action-btn:hover { background: #ddd; }
-        .action-btn.active-fav { background: #e0245e; color: #fff; }
-        #btt { display: none; position: fixed; bottom: 20px; right: 20px; padding: 12px 18px; background: #333; color: #fff; border: none; border-radius: 50px; cursor: pointer; z-index: 999; opacity: 0.8; font-weight: bold; box-shadow: 0 4px 10px rgba(0,0,0,0.5); transition: opacity 0.2s; }
-        #btt:hover { opacity: 1; }
+		
+		.lightbox-actions { display: flex; gap: 0.5rem; margin-top: 1.5rem; flex-wrap: wrap; justify-content: center; }
+		
+		#btt { display: none; position: fixed; bottom: 20px; right: 20px; z-index: 999; }
 	</style>
 </head>
 <body>
-    <div class="header-container">
-	    <h2 style="margin: 0;"><a href="/" style="text-decoration:none;">KipoBoard</a></h2>
-        <button id="view-favs" class="fav-nav">My Favorites</button>
-    </div>
-	<form id="search-form">
-		<input type="text" name="q" value="{{ Q }}" required placeholder="Search images..." autofocus> 
-		<input type="submit" value="Search">
-	</form>
+	<div class="header-container">
+		<h2 style="margin: 0;"><a href="/">KipoBoard</a></h2>
+		<form id="search-form" class="controls" style="margin: 0;">
+			<input type="text" name="q" value="{{ Q }}" required placeholder="Search images..." autofocus> 
+			<input type="submit" value="Search" class="btn">
+			<button type="button" id="view-favs" class="btn">Favorites</button>
+		</form>
+	</div>
+	
 	<div id="grid" class="masonry"></div>
 	<div id="raw" style="display:none;">{{ HTML|safe }}</div>
 	<p id="s" style="opacity:0.5; margin:2rem;">{{ Msg }}</p>
+
 	<div id="lightbox" onclick="if(event.target.id === 'lightbox' || event.target.id === 'lightbox-img') this.classList.remove('active')">
 		<img id="lightbox-img" src="" data-raw-url="" decoding="async">
-        <div class="lightbox-actions">
-            <button id="lightbox-fav" class="action-btn">🤍 Favorite</button>
-            <button id="lightbox-copy" class="action-btn">Copy Link</button>
-            <a id="lightbox-dl" href="" class="action-btn">Download</a>
-        </div>
+		<div class="lightbox-actions">
+			<button id="lightbox-fav" class="btn">Favorite</button>
+			<button id="lightbox-copy" class="btn">Copy Link</button>
+			<a id="lightbox-dl" href="" class="btn">Download</a>
+		</div>
 	</div>
-    <button id="btt" onclick="window.scrollTo({top:0, behavior:'smooth'})">↑ Top</button>
+
+	<button id="btt" class="btn" onclick="window.scrollTo({top:0, behavior:'smooth'})">Top</button>
+
 	<script>
 		let q={{ Q|tojson }}, b={{ B|tojson }}, c={{ C|tojson }}, l=false, s=document.getElementById('s'), g=document.getElementById('grid');
 		
@@ -103,85 +111,86 @@ HTML_TMPL = """<!DOCTYPE html>
 			let item = e.target.closest('.item');
 			if (item) {
 				e.preventDefault(); 
-                let url = item.getAttribute('href');
-                document.getElementById('lightbox-img').src = item.href;
-                document.getElementById('lightbox-img').setAttribute('data-raw-url', url);
-                document.getElementById('lightbox-dl').href = url + '&dl=1';
-                
-                let favs = JSON.parse(localStorage.getItem('kipofavs') || '[]');
-                let favBtn = document.getElementById('lightbox-fav');
-                if (favs.includes(url)) {
-                    favBtn.textContent = "❤️ Favorited";
-                    favBtn.classList.add('active-fav');
-                } else {
-                    favBtn.textContent = "🤍 Favorite";
-                    favBtn.classList.remove('active-fav');
-                }
+				let url = item.getAttribute('href');
+				document.getElementById('lightbox-img').src = item.href;
+				document.getElementById('lightbox-img').setAttribute('data-raw-url', url);
+				document.getElementById('lightbox-dl').href = url + '&dl=1';
+				
+				let favs = JSON.parse(localStorage.getItem('kipofavs') || '[]');
+				let favBtn = document.getElementById('lightbox-fav');
+				if (favs.includes(url)) {
+					favBtn.textContent = "Favorited";
+					favBtn.classList.add('active');
+				} else {
+					favBtn.textContent = "Favorite";
+					favBtn.classList.remove('active');
+				}
 				document.getElementById('lightbox').classList.add('active');
 			}
 		});
 
-        document.getElementById('lightbox-fav').addEventListener('click', (e) => {
-            e.stopPropagation();
-            let url = document.getElementById('lightbox-img').getAttribute('data-raw-url');
-            let favs = JSON.parse(localStorage.getItem('kipofavs') || '[]');
-            
-            if (favs.includes(url)) {
-                favs = favs.filter(u => u !== url);
-                e.target.textContent = "🤍 Favorite";
-                e.target.classList.remove('active-fav');
-            } else {
-                favs.push(url);
-                e.target.textContent = "❤️ Favorited";
-                e.target.classList.add('active-fav');
-            }
-            localStorage.setItem('kipofavs', JSON.stringify(favs));
-        });
+		document.getElementById('lightbox-fav').addEventListener('click', (e) => {
+			e.stopPropagation();
+			let url = document.getElementById('lightbox-img').getAttribute('data-raw-url');
+			let favs = JSON.parse(localStorage.getItem('kipofavs') || '[]');
+			
+			if (favs.includes(url)) {
+				favs = favs.filter(u => u !== url);
+				e.target.textContent = "Favorite";
+				e.target.classList.remove('active');
+			} else {
+				favs.push(url);
+				e.target.textContent = "Favorited";
+				e.target.classList.add('active');
+			}
+			localStorage.setItem('kipofavs', JSON.stringify(favs));
+		});
 
-        document.getElementById('view-favs').addEventListener('click', (e) => {
-            e.preventDefault();
-            let favs = JSON.parse(localStorage.getItem('kipofavs') || '[]');
-            
-            document.getElementById('search-form').style.display = 'none';
-            s.style.display = 'none';
-            g.innerHTML = '';
-            
-            cols.length = 0; 
-            Array.from({length: Math.max(3, Math.floor(window.innerWidth/200))}).forEach(() => {
-                let colDiv = document.createElement('div'); 
-                colDiv.className = 'col'; 
-                g.appendChild(colDiv); 
-                cols.push(colDiv);
-            });
+		document.getElementById('view-favs').addEventListener('click', (e) => {
+			e.preventDefault();
+			let favs = JSON.parse(localStorage.getItem('kipofavs') || '[]');
+			
+			document.querySelector('input[name="q"]').style.display = 'none';
+			document.querySelector('input[type="submit"]').style.display = 'none';
+			s.style.display = 'none';
+			g.innerHTML = '';
+			
+			cols.length = 0; 
+			Array.from({length: Math.max(3, Math.floor(window.innerWidth/200))}).forEach(() => {
+				let colDiv = document.createElement('div'); 
+				colDiv.className = 'col'; 
+				g.appendChild(colDiv); 
+				cols.push(colDiv);
+			});
 
-            if (favs.length === 0) {
-                s.style.display = 'block';
-                s.textContent = "You haven't saved any favorites yet.";
-                return;
-            }
+			if (favs.length === 0) {
+				s.style.display = 'block';
+				s.textContent = "No favorites saved.";
+				return;
+			}
 
-            let tmp = document.createElement('div');
-            favs.forEach(url => {
-                tmp.innerHTML += '<a class="item" href="'+url+'" target="_blank"><img src="'+url+'" loading="lazy" decoding="async"></a>';
-            });
-            addItems(tmp);
-        });
+			let tmp = document.createElement('div');
+			favs.forEach(url => {
+				tmp.innerHTML += '<a class="item" href="'+url+'" target="_blank"><img src="'+url+'" loading="lazy" decoding="async"></a>';
+			});
+			addItems(tmp);
+		});
 
-        document.getElementById('lightbox-copy').addEventListener('click', (e) => {
-            e.stopPropagation();
-            let rawPath = document.getElementById('lightbox-img').getAttribute('data-raw-url');
-            let fullUrl = window.location.origin + rawPath;
-            
-            navigator.clipboard.writeText(fullUrl).then(() => {
-                let btn = e.target;
-                btn.textContent = "Copied!";
-                setTimeout(() => { btn.textContent = "Copy Link"; }, 2000);
-            }).catch(err => {});
-        });
+		document.getElementById('lightbox-copy').addEventListener('click', (e) => {
+			e.stopPropagation();
+			let rawPath = document.getElementById('lightbox-img').getAttribute('data-raw-url');
+			let fullUrl = window.location.origin + rawPath;
+			
+			navigator.clipboard.writeText(fullUrl).then(() => {
+				let btn = e.target;
+				btn.textContent = "Copied";
+				setTimeout(() => { btn.textContent = "Copy Link"; }, 2000);
+			}).catch(err => {});
+		});
 
-        window.addEventListener('scroll', () => {
-            document.getElementById('btt').style.display = window.scrollY > 800 ? 'block' : 'none';
-        }, { passive: true });
+		window.addEventListener('scroll', () => {
+			document.getElementById('btt').style.display = window.scrollY > 800 ? 'block' : 'none';
+		}, { passive: true });
 	</script>
 </body>
 </html>"""
