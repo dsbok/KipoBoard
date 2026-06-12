@@ -19,8 +19,19 @@ HTML_TMPL = """<!DOCTYPE html>
 		input[type="text"] { width: 300px; max-width: 80vw; padding: 4px; }
 		.masonry { display: flex; gap: 1rem; padding: 1rem 0; align-items: flex-start; }
 		.col { display: flex; flex-direction: column; gap: 1rem; flex: 1 1 0; min-width: 0; }
-		.item img { width: 100%; display: block; background: #111; min-height: 100px; object-fit: cover; }
+		.item img { width: 100%; display: block; background: #111; min-height: 100px; object-fit: cover; border-radius: 4px; transition: opacity 0.2s ease; cursor: zoom-in; }
+		.item img:hover { opacity: 0.8; }
 		a { color: #fff; }
+
+		#lightbox { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 1000; align-items: center; justify-content: center; flex-direction: column; cursor: zoom-out; backdrop-filter: blur(5px); }
+		#lightbox img { max-width: 90vw; max-height: 85vh; object-fit: contain; border-radius: 8px; box-shadow: 0 10px 30px rgba(0,0,0,0.7); }
+		#lightbox.active { display: flex; }
+        
+        .dl-btn { margin-top: 20px; padding: 10px 24px; background: #fff; color: #000; text-decoration: none; border-radius: 20px; font-weight: bold; cursor: pointer; transition: background 0.2s; box-shadow: 0 4px 10px rgba(0,0,0,0.5); }
+        .dl-btn:hover { background: #ddd; }
+
+        #btt { display: none; position: fixed; bottom: 20px; right: 20px; padding: 12px 18px; background: #333; color: #fff; border: none; border-radius: 50px; cursor: pointer; z-index: 999; opacity: 0.8; font-weight: bold; box-shadow: 0 4px 10px rgba(0,0,0,0.5); transition: opacity 0.2s; }
+        #btt:hover { opacity: 1; }
 	</style>
 </head>
 <body>
@@ -34,8 +45,15 @@ HTML_TMPL = """<!DOCTYPE html>
 	<div id="raw" style="display:none;">{{ HTML|safe }}</div>
 	<p id="s" style="opacity:0.5; margin:2rem;">{{ Msg }}</p>
 
+	<div id="lightbox" onclick="if(event.target.id === 'lightbox' || event.target.id === 'lightbox-img') this.classList.remove('active')">
+		<img id="lightbox-img" src="">
+        <a id="lightbox-dl" href="" class="dl-btn">Download Image</a>
+	</div>
+
+    <button id="btt" onclick="window.scrollTo({top:0, behavior:'smooth'})">↑ Top</button>
+
 	<script>
-		let q="{{ Q }}", b="{{ B }}", c="{{ C }}", l=false, s=document.getElementById('s'), g=document.getElementById('grid');
+		let q={{ Q|tojson }}, b={{ B|tojson }}, c={{ C|tojson }}, l=false, s=document.getElementById('s'), g=document.getElementById('grid');
 		
 		const cols = Array.from({length: Math.max(3, Math.floor(window.innerWidth/200))}, () => {
 			let c = document.createElement('div'); c.className='col'; g.appendChild(c); return c;
@@ -47,9 +65,9 @@ HTML_TMPL = """<!DOCTYPE html>
 			});
 		}
 		
-        if (document.getElementById('raw').children.length > 0) {
-            addItems(document.getElementById('raw'));
-        }
+		if (document.getElementById('raw').children.length > 0) {
+			addItems(document.getElementById('raw'));
+		}
 
 		if(s && b) {
 			new IntersectionObserver(e => {
@@ -74,6 +92,20 @@ HTML_TMPL = """<!DOCTYPE html>
 			}
 			l = false;
 		}
+
+		g.addEventListener('click', e => {
+			let item = e.target.closest('.item');
+			if (item) {
+				e.preventDefault(); 
+				document.getElementById('lightbox-img').src = item.href;
+                document.getElementById('lightbox-dl').href = item.href + '&dl=1';
+				document.getElementById('lightbox').classList.add('active');
+			}
+		});
+
+        window.addEventListener('scroll', () => {
+            document.getElementById('btt').style.display = window.scrollY > 800 ? 'block' : 'none';
+        });
 	</script>
 </body>
 </html>"""
@@ -169,17 +201,37 @@ def api():
 @app.route("/proxy")
 def proxy():
     u = request.args.get("u", "")
-    if "pinimg.com" not in u and "pinterest.com" not in u:
-        return "Forbidden domain", 403
+    dl = request.args.get("dl", "0")
+    
+    try:
+        parsed_url = urllib.parse.urlparse(u)
+        hostname = parsed_url.hostname or ""
+        valid_domains = ("pinimg.com", ".pinimg.com", "pinterest.com", ".pinterest.com")
+        
+        if not hostname.endswith(valid_domains) or parsed_url.scheme not in ["http", "https"]:
+            return "Forbidden domain or scheme", 403
+    except Exception:
+        return "Invalid URL format", 400
 
     try:
         res = requests.get(
             u, headers={"User-Agent": "Mozilla/5.0"}, stream=True, timeout=15
         )
+        
+        content_type = res.headers.get("Content-Type", "")
+        if not content_type.startswith("image/"):
+            return "Forbidden content type", 403
+            
+        headers = {"Cache-Control": "public, max-age=86400"}
+        
+        if dl == "1":
+            filename = u.split("/")[-1] if "/" in u else "download.jpg"
+            headers["Content-Disposition"] = f'attachment; filename="{filename}"'
+
         return Response(
             res.iter_content(chunk_size=4096),
-            content_type=res.headers.get("Content-Type"),
-            headers={"Cache-Control": "public, max-age=86400"},
+            content_type=content_type,
+            headers=headers,
         )
     except requests.RequestException:
         return "Bad Gateway", 502
