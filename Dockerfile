@@ -5,12 +5,13 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
+RUN apk add --no-cache build-base jpeg-dev zlib-dev linux-headers
+
 RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
 COPY requirements.txt .
 
-# hadolint ignore=DL3013
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt && \
     pip uninstall -y pip setuptools wheel && \
@@ -23,7 +24,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PATH="/opt/venv/bin:$PATH"
 
-RUN addgroup -S nonroot && adduser -S nonroot -G nonroot
+RUN apk add --no-cache jpeg zlib curl && \
+    addgroup -S nonroot && adduser -S nonroot -G nonroot
 
 WORKDIR /app
 
@@ -34,4 +36,6 @@ USER nonroot:nonroot
 
 EXPOSE 5005
 
-CMD ["gunicorn", "--workers", "5", "--bind", "0.0.0.0:5005", "app:app"]
+HEALTHCHECK CMD curl --fail http://localhost:5005/_stcore/health || exit 1
+
+CMD ["streamlit", "run", "app.py", "--server.port=5005", "--server.address=0.0.0.0", "--server.headless=true"]
