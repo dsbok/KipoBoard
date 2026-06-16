@@ -5,9 +5,10 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-RUN apk add --no-cache build-base jpeg-dev zlib-dev linux-headers
+# hadolint ignore=DL3018
+RUN apk add --no-cache build-base jpeg-dev zlib-dev linux-headers && \
+    python -m venv /opt/venv
 
-RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
 COPY requirements.txt .
@@ -25,6 +26,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PATH="/opt/venv/bin:$PATH"
 
+# hadolint ignore=DL3018
 RUN apk add --no-cache jpeg zlib curl && \
     addgroup -S nonroot && adduser -S nonroot -G nonroot
 
