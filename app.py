@@ -1,199 +1,207 @@
+import streamlit as st
+import requests
+import urllib.parse
 import json
 import re
-import urllib.parse
-from flask import Flask, request, jsonify, render_template_string, Response
-import requests
+from PIL import Image
+import io
 
-app = Flask(__name__)
-session = requests.Session()
+st.set_page_config(
+    page_title="KipoBoard", layout="wide", initial_sidebar_state="collapsed"
+)
+
+st.iframe(
+    """
+<script>
+    const parentDoc = window.parent.document;
+
+    if (!parentDoc.getElementById('custom-lightbox')) {
+        const style = parentDoc.createElement('style');
+        style.innerHTML = `
+            #custom-lightbox {
+                display: none;
+                position: fixed;
+                z-index: 999999;
+                left: 0;
+                top: 0;
+                width: 100vw;
+                height: 100vh;
+                background-color: rgba(10, 10, 10, 0.95);
+                backdrop-filter: blur(10px);
+                align-items: center;
+                justify-content: center;
+                flex-direction: column;
+                opacity: 0;
+                transition: opacity 0.3s ease;
+            }
+            #custom-lightbox.active {
+                display: flex;
+                opacity: 1;
+            }
+            #lightbox-img {
+                max-width: 90vw;
+                max-height: 80vh;
+                border-radius: 8px;
+                box-shadow: 0 10px 30px rgba(0,0,0,0.8);
+                object-fit: contain;
+            }
+            .lightbox-controls {
+                margin-top: 25px;
+                display: flex;
+                gap: 15px;
+            }
+            .lightbox-btn {
+                background: #1a1a1a;
+                color: #fff;
+                border: 1px solid #333;
+                padding: 10px 24px;
+                border-radius: 8px;
+                cursor: pointer;
+                text-decoration: none;
+                font-family: system-ui, sans-serif;
+                font-size: 14px;
+                font-weight: 500;
+                transition: all 0.2s ease;
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+            }
+            .lightbox-btn:hover {
+                background: #fff;
+                color: #000;
+                border-color: #fff;
+                transform: translateY(-2px);
+            }
+            button[title="View fullscreen"] {
+                display: none !important;
+            }
+        `;
+        parentDoc.head.appendChild(style);
+
+        const lightbox = parentDoc.createElement('div');
+        lightbox.id = 'custom-lightbox';
+        
+        lightbox.onclick = function(e) {
+            if(e.target.id === 'custom-lightbox') {
+                lightbox.classList.remove('active');
+            }
+        };
+        
+        lightbox.innerHTML = `
+            <img id="lightbox-img" src="">
+            <div class="lightbox-controls">
+                <a id="lightbox-download" class="lightbox-btn" href="" download="kipoboard-image.jpg">
+                    <svg style="width:16px;height:16px;margin-right:8px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                    Download Image
+                </a>
+                <button class="lightbox-btn" id="lightbox-close">Close</button>
+            </div>
+        `;
+        parentDoc.body.appendChild(lightbox);
+
+        parentDoc.getElementById('lightbox-close').onclick = function() {
+            lightbox.classList.remove('active');
+        };
+
+        const observer = new MutationObserver(() => {
+            const images = parentDoc.querySelectorAll('div[data-testid="stImage"] img:not(.lightbox-bound)');
+            images.forEach(img => {
+                img.classList.add('lightbox-bound');
+                img.style.cursor = 'zoom-in';
+                
+                img.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const lb = parentDoc.getElementById('custom-lightbox');
+                    const lbImg = parentDoc.getElementById('lightbox-img');
+                    const lbDl = parentDoc.getElementById('lightbox-download');
+                    
+                    lbImg.src = img.src;
+                    lbDl.href = img.src; 
+                    lb.classList.add('active');
+                }, true);
+            });
+        });
+        observer.observe(parentDoc.body, { childList: true, subtree: true });
+    }
+</script>
+""",
+    height=1,
+    width="content",
+)
+
+st.markdown(
+    """
+    <style>
+        iframe {
+            position: absolute;
+            width: 0 !important;
+            height: 0 !important;
+            border: none;
+            visibility: hidden;
+        }
+        html, body, [data-testid="stAppViewContainer"] { background-color: #0a0a0a !important; }
+        
+        div[data-testid="stTextInput"] input {
+            background-color: #111111 !important; border: 1px solid #222222 !important;
+            color: #ffffff !important; border-radius: 8px !important; padding: 12px 16px !important; transition: all 0.3s ease;
+        }
+        div[data-testid="stTextInput"] input:focus { border-color: #ffffff !important; }
+
+        button[data-testid="baseButton-secondary"] {
+            background-color: #111111 !important; border: 1px solid #222222 !important;
+            color: #ffffff !important; border-radius: 8px !important; padding: 6px 18px !important; transition: all 0.2s ease !important;
+        }
+        button[data-testid="baseButton-secondary"]:hover {
+            background-color: #ffffff !important; color: #000000 !important; border-color: #ffffff !important;
+        }
+
+        div[data-testid="stColumn"] { animation: fadeIn 0.6s ease-in-out; }
+        div[data-testid="stImage"] img {
+            border-radius: 8px !important;
+            transition: transform 0.3s cubic-bezier(0.25, 1, 0.5, 1), filter 0.3s ease !important;
+        }
+        div[data-testid="stImage"] img:hover { transform: scale(1.02); filter: brightness(0.9); }
+
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        #MainMenu, footer, header {visibility: hidden;}
+    </style>
+""",
+    unsafe_allow_html=True,
+)
+
+for key, default in [
+    ("page", 1),
+    ("bookmarks", {1: ""}),
+    ("csrftokens", {1: ""}),
+    ("search_query", ""),
+    ("images", []),
+    ("has_more", False),
+    ("scroll_trigger", False),
+]:
+    if key not in st.session_state:
+        st.session_state[key] = default
 
 csrf_regex = re.compile(r"csrftoken=([^;]+)")
+api_session = requests.Session()
 
-HTML_TMPL = """<!DOCTYPE html>
-<html lang="en">
-<head>
-	<title>KipoBoard</title>
-	<meta name="viewport" content="width=device-width, initial-scale=1.0">
-	<style>
-		body { font-family: system-ui, sans-serif; margin: 0; padding: 1rem; text-align: center; background: #000; color: #fff; }
-		a { color: #fff; text-decoration: none; }
-		.masonry { display: flex; gap: 1rem; padding: 1rem 0; align-items: flex-start; }
-		.col { display: flex; flex-direction: column; gap: 1rem; flex: 1 1 0; min-width: 0; }
-		.item img { width: 100%; display: block; background: #111; min-height: 100px; object-fit: cover; border-radius: 4px; transition: opacity 0.2s ease; cursor: zoom-in; content-visibility: auto; }
-		.item img:hover { opacity: 0.8; }
-		
-		.btn, input[type="submit"] { background: #000; border: 1px solid #333; color: #fff; padding: 10px 20px; border-radius: 4px; cursor: pointer; transition: all 0.2s ease; font-family: inherit; font-size: 14px; text-decoration: none; display: inline-flex; align-items: center; justify-content: center; margin: 0; box-sizing: border-box; }
-		.btn:hover, input[type="submit"]:hover { background: #fff; color: #000; border-color: #fff; }
-		.btn.active { background: #fff; color: #000; border-color: #fff; }
-		
-		input[type="text"] { background: #000; border: 1px solid #333; color: #fff; padding: 10px 16px; border-radius: 4px; width: 300px; max-width: 100%; outline: none; font-family: inherit; font-size: 14px; transition: border-color 0.2s ease; box-sizing: border-box; }
-		input[type="text"]:focus { border-color: #fff; }
-		
-		.header-container { display: flex; flex-direction: column; align-items: center; gap: 1.5rem; margin: 1rem 0 2rem 0; }
-		.controls { display: flex; gap: 0.5rem; flex-wrap: wrap; justify-content: center; }
-		
-		#lightbox { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 1000; align-items: center; justify-content: center; flex-direction: column; cursor: zoom-out; backdrop-filter: blur(5px); }
-		#lightbox img { max-width: 90vw; max-height: 80vh; object-fit: contain; border-radius: 4px; }
-		#lightbox.active { display: flex; }
-		
-		.lightbox-actions { display: flex; gap: 0.5rem; margin-top: 1.5rem; flex-wrap: wrap; justify-content: center; }
-		
-		#btt { display: none; position: fixed; bottom: 20px; right: 20px; z-index: 999; }
-	</style>
-</head>
-<body>
-	<div class="header-container">
-		<h2 style="margin: 0;"><a href="/">KipoBoard</a></h2>
-		<form id="search-form" class="controls" style="margin: 0;">
-			<input type="text" name="q" value="{{ Q }}" required placeholder="Search images..." autofocus> 
-			<input type="submit" value="Search" class="btn">
-			<button type="button" id="view-favs" class="btn">Favorites</button>
-		</form>
-	</div>
-	
-	<div id="grid" class="masonry"></div>
-	<div id="raw" style="display:none;">{{ HTML|safe }}</div>
-	<p id="s" style="opacity:0.5; margin:2rem;">{{ Msg }}</p>
 
-	<div id="lightbox" onclick="if(event.target.id === 'lightbox' || event.target.id === 'lightbox-img') this.classList.remove('active')">
-		<img id="lightbox-img" src="" data-raw-url="" decoding="async">
-		<div class="lightbox-actions">
-			<button id="lightbox-fav" class="btn">Favorite</button>
-			<button id="lightbox-copy" class="btn">Copy Link</button>
-			<a id="lightbox-dl" href="" class="btn">Download</a>
-		</div>
-	</div>
-
-	<button id="btt" class="btn" onclick="window.scrollTo({top:0, behavior:'smooth'})">Top</button>
-
-	<script>
-		let q={{ Q|tojson }}, b={{ B|tojson }}, c={{ C|tojson }}, l=false, s=document.getElementById('s'), g=document.getElementById('grid');
-		
-		const cols = Array.from({length: Math.max(3, Math.floor(window.innerWidth/200))}, () => {
-			let c = document.createElement('div'); c.className='col'; g.appendChild(c); return c;
-		});
-
-		function addItems(cnt) {
-			Array.from(cnt.children).forEach(i => {
-				cols.reduce((min, cur) => cur.offsetHeight < min.offsetHeight ? cur : min, cols[0]).appendChild(i);
-			});
-		}
-		
-		if (document.getElementById('raw').children.length > 0) {
-			addItems(document.getElementById('raw'));
-		}
-
-		if(s && b) {
-			new IntersectionObserver(e => {
-				if(e[0].isIntersecting && !l && b) loadMore();
-			}, {rootMargin: "800px"}).observe(s);
-		}
-
-		async function loadMore() {
-			l = true;
-			try {
-				let d = await (await fetch('/api?q='+encodeURIComponent(q)+'&b='+encodeURIComponent(b)+'&c='+encodeURIComponent(c))).json();
-				let tmp = document.createElement('div');
-				d.images.forEach(i => {
-					let p = '/proxy?u='+encodeURIComponent(i);
-					tmp.innerHTML += '<a class="item" href="'+p+'" target="_blank"><img src="'+p+'" loading="lazy" decoding="async"></a>';
-				});
-				addItems(tmp);
-				b=d.bookmark; c=d.csrftoken;
-				if(!b) s.textContent="No more results.";
-			} catch(e) {
-				s.textContent="Error loading more.";
-			}
-			l = false;
-		}
-
-		g.addEventListener('click', e => {
-			let item = e.target.closest('.item');
-			if (item) {
-				e.preventDefault(); 
-				let url = item.getAttribute('href');
-				document.getElementById('lightbox-img').src = item.href;
-				document.getElementById('lightbox-img').setAttribute('data-raw-url', url);
-				document.getElementById('lightbox-dl').href = url + '&dl=1';
-				
-				let favs = JSON.parse(localStorage.getItem('kipofavs') || '[]');
-				let favBtn = document.getElementById('lightbox-fav');
-				if (favs.includes(url)) {
-					favBtn.textContent = "Favorited";
-					favBtn.classList.add('active');
-				} else {
-					favBtn.textContent = "Favorite";
-					favBtn.classList.remove('active');
-				}
-				document.getElementById('lightbox').classList.add('active');
-			}
-		});
-
-		document.getElementById('lightbox-fav').addEventListener('click', (e) => {
-			e.stopPropagation();
-			let url = document.getElementById('lightbox-img').getAttribute('data-raw-url');
-			let favs = JSON.parse(localStorage.getItem('kipofavs') || '[]');
-			
-			if (favs.includes(url)) {
-				favs = favs.filter(u => u !== url);
-				e.target.textContent = "Favorite";
-				e.target.classList.remove('active');
-			} else {
-				favs.push(url);
-				e.target.textContent = "Favorited";
-				e.target.classList.add('active');
-			}
-			localStorage.setItem('kipofavs', JSON.stringify(favs));
-		});
-
-		document.getElementById('view-favs').addEventListener('click', (e) => {
-			e.preventDefault();
-			let favs = JSON.parse(localStorage.getItem('kipofavs') || '[]');
-			
-			document.querySelector('input[name="q"]').style.display = 'none';
-			document.querySelector('input[type="submit"]').style.display = 'none';
-			s.style.display = 'none';
-			g.innerHTML = '';
-			
-			cols.length = 0; 
-			Array.from({length: Math.max(3, Math.floor(window.innerWidth/200))}).forEach(() => {
-				let colDiv = document.createElement('div'); 
-				colDiv.className = 'col'; 
-				g.appendChild(colDiv); 
-				cols.push(colDiv);
-			});
-
-			if (favs.length === 0) {
-				s.style.display = 'block';
-				s.textContent = "No favorites saved.";
-				return;
-			}
-
-			let tmp = document.createElement('div');
-			favs.forEach(url => {
-				tmp.innerHTML += '<a class="item" href="'+url+'" target="_blank"><img src="'+url+'" loading="lazy" decoding="async"></a>';
-			});
-			addItems(tmp);
-		});
-
-		document.getElementById('lightbox-copy').addEventListener('click', (e) => {
-			e.stopPropagation();
-			let rawPath = document.getElementById('lightbox-img').getAttribute('data-raw-url');
-			let fullUrl = window.location.origin + rawPath;
-			
-			navigator.clipboard.writeText(fullUrl).then(() => {
-				let btn = e.target;
-				btn.textContent = "Copied";
-				setTimeout(() => { btn.textContent = "Copy Link"; }, 2000);
-			}).catch(err => {});
-		});
-
-		window.addEventListener('scroll', () => {
-			document.getElementById('btt').style.display = window.scrollY > 800 ? 'block' : 'none';
-		}, { passive: true });
-	</script>
-</body>
-</html>"""
+@st.cache_data(show_spinner=False, ttl=3600)
+def proxy_image(url):
+    try:
+        res = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=10)
+        if res.status_code == 200 and res.headers.get("Content-Type", "").startswith(
+            "image/"
+        ):
+            try:
+                img = Image.open(io.BytesIO(res.content))
+                img.verify()
+                return res.content
+            except Exception:
+                return None
+    except Exception:
+        pass
+    return None
 
 
 def search_pinterest(q, b="", c=""):
@@ -209,7 +217,7 @@ def search_pinterest(q, b="", c=""):
         "X-Requested-With": "XMLHttpRequest",
         "X-Pinterest-AppState": "active",
         "X-Pinterest-PWS-Handler": "www/search/[scope].js",
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "User-Agent": "Mozilla/5.0",
     }
 
     if c:
@@ -217,30 +225,22 @@ def search_pinterest(q, b="", c=""):
         headers["Cookie"] = f"csrftoken={c}"
 
     try:
-        res = session.get(target_url, headers=headers, timeout=15)
-    except requests.RequestException:
-        return {"images": [], "bookmark": "", "csrftoken": c}
-
-    if "set-cookie" in res.headers:
-        m = csrf_regex.search(res.headers["set-cookie"])
-        if m:
-            c = m.group(1)
-
-    try:
+        res = api_session.get(target_url, headers=headers, timeout=15)
+        if "set-cookie" in res.headers:
+            m = csrf_regex.search(res.headers["set-cookie"])
+            if m:
+                c = m.group(1)
         data = res.json()
-    except ValueError:
+    except Exception:
         return {"images": [], "bookmark": "", "csrftoken": c}
 
-    imgs = []
-    resource_response = data.get("resource_response", {})
-    results = resource_response.get("data", {}).get("results", [])
+    imgs = [
+        r.get("images", {}).get("orig", {}).get("url", "")
+        for r in data.get("resource_response", {}).get("data", {}).get("results", [])
+    ]
+    imgs = [img for img in imgs if img]
 
-    for r in results:
-        img_url = r.get("images", {}).get("orig", {}).get("url", "")
-        if img_url:
-            imgs.append(img_url)
-
-    nb = resource_response.get("bookmark", "")
+    nb = data.get("resource_response", {}).get("bookmark", "")
     if not nb:
         bookmarks = data.get("resource", {}).get("options", {}).get("bookmarks", [])
         if bookmarks:
@@ -249,71 +249,116 @@ def search_pinterest(q, b="", c=""):
     return {"images": imgs, "bookmark": nb, "csrftoken": c}
 
 
-@app.route("/")
-def home():
-    q = request.args.get("q", "")
+def perform_search(reset=False):
+    if reset:
+        st.session_state.page = 1
+        st.session_state.bookmarks = {1: ""}
+        st.session_state.csrftokens = {1: ""}
+
+    current_page = st.session_state.page
+    q = st.session_state.search_query
+
+    b = st.session_state.bookmarks.get(current_page, "")
+    c = st.session_state.csrftokens.get(current_page, "")
+
     if not q:
-        return render_template_string(HTML_TMPL, Q="", HTML="", Msg="", B="", C="")
+        st.session_state.images = []
+        return
 
-    res = search_pinterest(q, "", "")
-    html = ""
-    for img in res["images"]:
-        u = urllib.parse.quote(img)
-        html += f'<a class="item" href="/proxy?u={u}" target="_blank"><img src="/proxy?u={u}" loading="lazy" decoding="async"></a>'
+    res = search_pinterest(q, b, c)
+    st.session_state.images = res["images"][:15]
 
-    msg = ""
+    next_page = current_page + 1
     if res["bookmark"]:
-        msg = "Loading..."
-    elif not res["images"]:
-        msg = "No results."
+        st.session_state.bookmarks[next_page] = res["bookmark"]
+        st.session_state.csrftokens[next_page] = res["csrftoken"]
+        st.session_state.has_more = True
+    else:
+        st.session_state.has_more = False
 
-    return render_template_string(
-        HTML_TMPL, Q=q, HTML=html, Msg=msg, B=res["bookmark"], C=res["csrftoken"]
+
+def do_search():
+    st.session_state.search_query = st.session_state.q_input
+    st.session_state.scroll_trigger = True
+    perform_search(reset=True)
+
+
+def go_next():
+    st.session_state.page += 1
+    st.session_state.scroll_trigger = True
+    perform_search(reset=False)
+
+
+def go_prev():
+    st.session_state.page -= 1
+    st.session_state.scroll_trigger = True
+    perform_search(reset=False)
+
+
+if st.session_state.scroll_trigger:
+    st.iframe(
+        "<script>window.parent.scrollTo({top: 0, behavior: 'smooth'});</script>",
+        height=1,
+        width="content",
+    )
+    st.session_state.scroll_trigger = False
+
+st.markdown(
+    "<h1 style='text-align: center; font-weight: 300; letter-spacing: -1px; margin-bottom: 0px;'>KipoBoard</h1>",
+    unsafe_allow_html=True,
+)
+st.markdown(
+    "<p style='text-align: center; margin-bottom: 30px;'><a href='https://github.com/dsbok/KipoBoard' target='_blank' style='color: #666; text-decoration: none; border-bottom: 1px dotted #666; padding-bottom: 2px;'>Source</a></p>",
+    unsafe_allow_html=True,
+)
+
+col_input, col_btn = st.columns([5, 1])
+with col_input:
+    st.text_input(
+        "Search images...",
+        key="q_input",
+        label_visibility="collapsed",
+        placeholder="What are you looking for?",
+        on_change=do_search,
+    )
+with col_btn:
+    st.button("Search", width="stretch", on_click=do_search)
+
+st.markdown("<div style='margin-top: 20px;'></div>", unsafe_allow_html=True)
+
+if st.session_state.images:
+    cols = st.columns(4, gap="medium")
+    for idx, img_url in enumerate(st.session_state.images):
+        col_idx = idx % 4
+        with cols[col_idx]:
+            image_bytes = proxy_image(img_url)
+            if image_bytes:
+                try:
+                    st.image(image_bytes, width="stretch")
+                except Exception:
+                    pass
+elif st.session_state.search_query:
+    st.markdown(
+        "<p style='text-align: center; color: #666;'>No alternative results found.</p>",
+        unsafe_allow_html=True,
     )
 
+if st.session_state.search_query and (
+    st.session_state.page > 1 or st.session_state.has_more
+):
+    st.markdown("<div style='margin-top: 40px;'></div>", unsafe_allow_html=True)
+    col_prev, col_page, col_next = st.columns([1, 2, 1])
 
-@app.route("/api")
-def api():
-    q = request.args.get("q", "")
-    b = request.args.get("b", "")
-    c = request.args.get("c", "")
-    return jsonify(search_pinterest(q, b, c))
+    with col_prev:
+        if st.session_state.page > 1:
+            st.button("← Previous", width="stretch", on_click=go_prev)
 
-
-@app.route("/proxy")
-def proxy():
-    u = request.args.get("u", "")
-    dl = request.args.get("dl", "0")
-    
-    try:
-        parsed_url = urllib.parse.urlparse(u)
-        hostname = parsed_url.hostname or ""
-        valid_domains = ("pinimg.com", ".pinimg.com", "pinterest.com", ".pinterest.com")
-        
-        if not hostname.endswith(valid_domains) or parsed_url.scheme not in ["http", "https"]:
-            return "Forbidden domain or scheme", 403
-    except Exception:
-        return "Invalid URL format", 400
-
-    try:
-        res = session.get(
-            u, headers={"User-Agent": "Mozilla/5.0"}, stream=True, timeout=15
+    with col_page:
+        st.markdown(
+            f"<p style='text-align: center; color: #888; font-size: 14px; margin-top: 8px;'>Page {st.session_state.page}</p>",
+            unsafe_allow_html=True,
         )
-        
-        content_type = res.headers.get("Content-Type", "")
-        if not content_type.startswith("image/"):
-            return "Forbidden content type", 403
-            
-        headers = {"Cache-Control": "public, max-age=86400"}
-        
-        if dl == "1":
-            filename = u.split("/")[-1] if "/" in u else "download.jpg"
-            headers["Content-Disposition"] = f'attachment; filename="{filename}"'
 
-        return Response(
-            res.iter_content(chunk_size=4096),
-            content_type=content_type,
-            headers=headers,
-        )
-    except requests.RequestException:
-        return "Bad Gateway", 502
+    with col_next:
+        if st.session_state.has_more:
+            st.button("Next →", width="stretch", on_click=go_next)
