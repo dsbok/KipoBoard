@@ -10,7 +10,7 @@ https://kipoboard.daniisaahir.com
 
 ```bash
 pip install -r requirements.txt
-streamlit run app.py --server.port=5005 --server.address=0.0.0.0 --server.headless=true
+gunicorn --workers 5 --bind 0.0.0.0:5005 app:app
 ```
 
 Open:
