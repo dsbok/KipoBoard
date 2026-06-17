@@ -27,13 +27,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push
-        run: 
+        run: |
           IMAGE="ghcr.io/${GITHUB_REPOSITORY,,}"
           TAG="${GITHUB_REF_NAME//\//-}"
-          docker buildx build \
-            --platform linux/amd64,linux/arm64 \
-            --tag "$IMAGE:$TAG" \
-            --tag "$IMAGE:latest" \
-            --cache-from type=gha \
-            --cache-to type=gha,mode=max \
-            --push .
+          docker buildx build --platform linux/amd64,linux/arm64 --tag "$IMAGE:$TAG" --tag "$IMAGE:latest" --cache-from type=gha --cache-to type=gha,mode=max --push .
