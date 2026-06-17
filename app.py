@@ -74,11 +74,9 @@ HTML_TMPL = """<!DOCTYPE html>
         .grid { column-count: 4; column-gap: 1rem; padding: 1rem 0; }
         @media (max-width: 800px) { .grid { column-count: 2; } }
         .item { display: inline-block; width: 100%; margin-bottom: 1rem; border-radius: 4px; overflow: hidden; }
-        .item img { width: 100%; display: block; background: #111; cursor: zoom-in; }
-        #lightbox { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.9); z-index: 1000; align-items: center; justify-content: center; flex-direction: column; cursor: zoom-out; }
-        #lightbox img { max-width: 90vw; max-height: 85vh; object-fit: contain; }
-        #lightbox.active { display: flex; }
-        .dl-btn { margin-top: 20px; padding: 10px 24px; background: #fff; color: #000; text-decoration: none; border-radius: 20px; font-weight: bold; }
+        .item img { width: 100%; display: block; background: #111; }
+        .nav { text-align: center; padding: 2rem 0; }
+        .nav a { color: #fff; text-decoration: none; padding: 10px 20px; border: 1px solid #fff; border-radius: 4px; }
         #btt { position: fixed; bottom: 20px; right: 20px; padding: 10px; background: #333; color: #fff; border: none; border-radius: 50%; cursor: pointer; }
     </style>
 </head>
@@ -86,31 +84,11 @@ HTML_TMPL = """<!DOCTYPE html>
     <h2 style="text-align:center;"><a href="/" style="color:#fff; text-decoration:none;">KipoBoard</a></h2>
     <form><input type="text" name="q" value="{{ Q }}" required placeholder="Search..." autofocus> <input type="submit" value="Search"></form>
     <div id="grid" class="grid">{{ HTML|safe }}</div>
-    <p id="s" style="text-align:center; opacity:0.5;">{{ Msg }}</p>
-    <div id="lightbox" onclick="this.classList.remove('active')">
-        <img id="lb-img" src=""><a id="lb-dl" href="" class="dl-btn">Download</a>
-    </div>
-    <button id="btt" onclick="window.scrollTo(0,0)">â</button>
-    <script>
-        let q={{ Q|tojson }}, b={{ B|tojson }}, c={{ C|tojson }}, l=false;
-        if(b) new IntersectionObserver(async e => {
-            if(e[0].isIntersecting && !l && b) {
-                l=true;
-                try {
-                    let d = await (await fetch(`/api?q=${q}&b=${b}&c=${c}`)).json();
-                    d.images.forEach(i => {
-                        let p = '/proxy?u='+encodeURIComponent(i);
-                        document.getElementById('grid').insertAdjacentHTML('beforeend', `<a class="item" href="${p}"><img src="${p}" loading="lazy"></a>`);
-                    });
-                    b=d.bookmark; c=d.csrftoken;
-                } finally { l=false; if(!b) document.getElementById('s').textContent="End."; }
-            }
-        }, {rootMargin: "800px"}).observe(document.getElementById('s'));
-        document.getElementById('grid').onclick = e => {
-            let a = e.target.closest('.item');
-            if(a) { e.preventDefault(); document.getElementById('lb-img').src=a.href; document.getElementById('lb-dl').href=a.href+'&dl=1'; document.getElementById('lightbox').classList.add('active'); }
-        };
-    </script>
+    {% if Next %}
+    <div class="nav"><a href="{{ Next }}">Next Page →</a></div>
+    {% endif %}
+    <p style="text-align:center; opacity:0.5;">{{ Msg }}</p>
+    <button id="btt" onclick="window.scrollTo(0,0)">↑</button>
 </body>
 </html>"""
 
@@ -118,29 +96,20 @@ HTML_TMPL = """<!DOCTYPE html>
 @app.route("/")
 def home():
     q = request.args.get("q", "")
-    res = search_pinterest(q) if q else {"images": [], "bookmark": "", "csrftoken": ""}
+    b = request.args.get("b", "")
+    c = request.args.get("c", "")
+    res = search_pinterest(q, b, c) if q else {"images": [], "bookmark": "", "csrftoken": ""}
     html = "".join(
-        f'<a class="item" href="/proxy?u={urllib.parse.quote(img)}"><img src="/proxy?u={urllib.parse.quote(img)}" loading="lazy"></a>'
+        f'<a class="item" href="/proxy?u={urllib.parse.quote(img)}" target="_blank"><img src="/proxy?u={urllib.parse.quote(img)}" loading="lazy"></a>'
         for img in res["images"]
     )
+    next_url = f"/?q={urllib.parse.quote(q)}&b={urllib.parse.quote(res['bookmark'])}&c={urllib.parse.quote(res['csrftoken'])}" if res["bookmark"] else ""
     return render_template_string(
         HTML_TMPL,
         Q=q,
         HTML=html,
-        Msg="Loading..." if res["bookmark"] else ("No results" if q else ""),
-        B=res["bookmark"],
-        C=res["csrftoken"],
-    )
-
-
-@app.route("/api")
-def api():
-    return jsonify(
-        search_pinterest(
-            request.args.get("q", ""),
-            request.args.get("b", ""),
-            request.args.get("c", ""),
-        )
+        Next=next_url,
+        Msg="No results" if q and not res["images"] else "",
     )
 
 
