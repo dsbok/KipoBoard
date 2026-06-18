@@ -15,9 +15,6 @@ pip install -r requirements.txt
 gunicorn --workers 2 --bind 0.0.0.0:5005 app:app
 ```
 
-Open:
-http://localhost:5005
-
 ## Docker
 
 ```bash
@@ -25,7 +22,7 @@ docker run -d \
   --name kipoboard \
   --restart unless-stopped \
   -p 5005:5005 \
-  ghcr.io/dsbok/kipoboard:main
+  ghcr.io/dsbok/kipoboard:latest
 ```
 
 ## Docker Compose
@@ -33,7 +30,7 @@ docker run -d \
 ```yaml
 services:
   kipoboard:
-    image: ghcr.io/dsbok/kipoboard:main
+    image: ghcr.io/dsbok/kipoboard:latest
     restart: unless-stopped
     ports:
       - "5005:5005"
