@@ -3,11 +3,6 @@ name: Docker
 on:
   push:
     branches: [main]
-  workflow_dispatch:
-
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
 
 permissions:
   packages: write
@@ -15,7 +10,6 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-qemu-action@v3
@@ -25,9 +19,5 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build and push
-        run: |
-          IMAGE="ghcr.io/${GITHUB_REPOSITORY,,}"
-          TAG="${GITHUB_REF_NAME//\//-}"
-          docker buildx build --platform linux/amd64,linux/arm64 --tag "$IMAGE:$TAG" --tag "$IMAGE:latest" --cache-from type=gha --cache-to type=gha,mode=max --push .
+      - run: |
+          docker buildx build --platform linux/amd64,linux/arm64 --tag "ghcr.io/${GITHUB_REPOSITORY,,}:latest" --cache-from type=gha --cache-to type=gha,mode=max --push .
