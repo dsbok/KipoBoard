@@ -1,6 +1,6 @@
 # KipoBoard
 
-Simple Pinterest image search proxy.
+Pinterest image search proxy.
 
 ## Demo
 
