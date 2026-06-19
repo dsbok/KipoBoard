@@ -2,6 +2,10 @@
 
 Pinterest image search proxy.
 
+
+> [!NOTE]
+> **Project Status:** This project is not abandoned, but instead is final and stable. It will not receive further updates or feature additions unless Pinterest changes their API structure, which would require a fix.
+
 ## Demo
 
 https://kipoboard.daniisaahir.com
