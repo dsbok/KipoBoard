@@ -72,7 +72,7 @@ body{background:#000;color:#fff;font-family:sans-serif;text-align:center;margin:
 <form style="padding:1em"><input name="q" value="{{q}}" autofocus><input type="submit" value="Search"></form>
 <div class="g">
 {% for i in imgs %}<a href="/proxy?u={{i|urlencode}}"><img src="/proxy?u={{i|urlencode}}" style="width:100%;margin-bottom:1em" loading="lazy"></a>{% endfor %}
-</div>{% if n %}<a href="/?q={{q|urlencode}}&b={{n|urlencode}}" style="color:#fff;display:block;padding:2em">Next â</a>{% endif %}</body>"""
+</div>{% if n %}<a href="/?q={{q|urlencode}}&b={{n|urlencode}}" style="color:#fff;display:block;padding:2em">Next</a>{% endif %}</body>"""
 
 
 @app.route("/")
