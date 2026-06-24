@@ -13,16 +13,16 @@ pip install -r requirements.txt
 python app.py
 
 ```
-## Docker
+## Podman (CLI)
 ```bash
-docker run -d \
+podman run -d \
   --name kipoboard \
   --restart unless-stopped \
   -p 5005:5005 \
   ghcr.io/dsbok/kipoboard:latest
 
 ```
-## Docker Compose
+## Podman Compose
 ```yaml
 services:
   kipoboard:
