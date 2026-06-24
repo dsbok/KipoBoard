@@ -68,7 +68,7 @@ T = """<head><meta name="viewport" content="width=device-width,initial-scale=1">
 body{background:#000;color:#fff;font-family:sans-serif;text-align:center;margin:0}
 .g{column-count:4;gap:1em;padding:0 1em} @media(max-width:800px){.g{column-count:2}}
 </style></head><body>
-<h2 style="margin:1em 0 0"><a href="/" style="color:#fff;text-decoration:none">KipoBoard</a></h2>
+<h2 style="margin:1em 0 0"><a href="/" style="color:#fff;text-decoration:none">kipoboard</a></h2>
 <form style="padding:1em"><input name="q" value="{{q}}" autofocus><input type="submit" value="Search"></form>
 <div class="g">
 {% for i in imgs %}<a href="/proxy?u={{i|urlencode}}"><img src="/proxy?u={{i|urlencode}}" style="width:100%;margin-bottom:1em" loading="lazy"></a>{% endfor %}
