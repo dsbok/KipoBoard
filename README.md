@@ -1,4 +1,4 @@
-# KipoBoard
+# kipoboard
 Pinterest image search proxy.
 > [!NOTE]
 > **Project Status:** Stable. No updates planned unless Pinterest API changes require fix.
