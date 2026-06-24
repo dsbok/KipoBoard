@@ -1,5 +1,13 @@
-FROM python:3.12-alpine
+FROM fedora:44
+
+RUN dnf -y update && \
+    dnf -y install python3 python3-pip && \
+    dnf clean all
+
 WORKDIR /app
+
 COPY . .
-RUN pip install --no-cache-dir -r requirements.txt
-CMD ["python", "app.py"]
+
+RUN pip3 install --no-cache-dir -r requirements.txt
+
+CMD ["python3", "app.py"]
