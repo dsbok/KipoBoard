@@ -1,0 +1,20 @@
+name: Docker
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  packages: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build and Push Image
+        run: |
+          docker login ghcr.io -u ${{ github.actor }} -p ${{ secrets.GITHUB_TOKEN }}
+          docker build -t ghcr.io/${{ github.repository }}:latest -f Dockerfile .
+          docker push ghcr.io/${{ github.repository }}:latest
