@@ -1,8 +1,4 @@
-FROM ubuntu:24.04
-
-RUN apt-get update && \
-    apt-get install -y python3 && \
-    rm -rf /var/lib/apt/lists/*
+FROM python:3.12-alpine
 
 WORKDIR /app
 
@@ -10,4 +6,4 @@ COPY app.py .
 
 EXPOSE 5005
 
-CMD ["python3", "app.py"]
+CMD ["python", "app.py"]
