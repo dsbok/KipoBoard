@@ -5,10 +5,13 @@ import (
 	"fmt"
 	"html"
 	"io"
+	"log"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -21,6 +24,94 @@ body{background:#000;color:#fff;font-family:sans-serif;text-align:center;margin:
 <div class="g">
 {{imgs}}
 </div>{{next_btn}}</body>`
+
+var (
+	httpTransport = &http.Transport{
+		Proxy: http.ProxyFromEnvironment,
+		DialContext: (&net.Dialer{
+			Timeout:   5 * time.Second,
+			KeepAlive: 30 * time.Second,
+		}).DialContext,
+		MaxIdleConns:          500,
+		MaxIdleConnsPerHost:   100,
+		IdleConnTimeout:       90 * time.Second,
+		TLSHandshakeTimeout:   5 * time.Second,
+		ExpectContinueTimeout: 1 * time.Second,
+	}
+	pinterestClient = &http.Client{
+		Timeout:   10 * time.Second,
+		Transport: httpTransport,
+	}
+	proxyClient = &http.Client{
+		Timeout:   5 * time.Second,
+		Transport: httpTransport,
+	}
+)
+
+type cachedSearch struct {
+	urls     []string
+	bookmark string
+	expiry   time.Time
+}
+
+type searchCache struct {
+	mu    sync.RWMutex
+	store map[string]cachedSearch
+}
+
+func newSearchCache() *searchCache {
+	c := &searchCache{
+		store: make(map[string]cachedSearch),
+	}
+	go func() {
+		for {
+			time.Sleep(5 * time.Minute)
+			c.mu.Lock()
+			now := time.Now()
+			for key, val := range c.store {
+				if now.After(val.expiry) {
+					delete(c.store, key)
+				}
+			}
+			c.mu.Unlock()
+		}
+	}()
+	return c
+}
+
+func (c *searchCache) get(q, b string) ([]string, string, bool) {
+	key := q + "\x00" + b
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	item, exists := c.store[key]
+	if !exists || time.Now().After(item.expiry) {
+		return nil, "", false
+	}
+	return item.urls, item.bookmark, true
+}
+
+func (c *searchCache) set(q, b string, urls []string, bookmark string, ttl time.Duration) {
+	key := q + "\x00" + b
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.store[key] = cachedSearch{
+		urls:     urls,
+		bookmark: bookmark,
+		expiry:   time.Now().Add(ttl),
+	}
+}
+
+var cache = newSearchCache()
+
+func secureHeaders(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("X-Frame-Options", "DENY")
+		w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
+		w.Header().Set("Content-Security-Policy", "default-src 'self'; style-src 'unsafe-inline'; img-src 'self' data:; frame-ancestors 'none'; form-action 'self';")
+		next.ServeHTTP(w, r)
+	})
+}
 
 type SearchOptions struct {
 	Query     string   `json:"query"`
@@ -87,11 +178,7 @@ func search(q, b string) ([]string, string, error) {
 	req.Header.Set("X-Pinterest-AppState", "active")
 	req.Header.Set("X-Pinterest-PWS-Handler", "www/search/[scope].js")
 
-	client := &http.Client{
-		Timeout: 10 * time.Second,
-	}
-
-	resp, err := client.Do(req)
+	resp, err := pinterestClient.Do(req)
 	if err != nil {
 		return nil, "", err
 	}
@@ -121,19 +208,26 @@ func handleIndex(w http.ResponseWriter, r *http.Request) {
 	}
 
 	q := r.URL.Query().Get("q")
-	if len(q) > 100 {
-		q = q[:100]
+	qRunes := []rune(q)
+	if len(qRunes) > 100 {
+		q = string(qRunes[:100])
 	}
 	b := r.URL.Query().Get("b")
 
 	var imgs []string
 	var n string
 	if q != "" {
-		var err error
-		imgs, n, err = search(q, b)
-		if err != nil {
-			imgs = []string{}
-			n = ""
+		var found bool
+		imgs, n, found = cache.get(q, b)
+		if !found {
+			var err error
+			imgs, n, err = search(q, b)
+			if err != nil {
+				imgs = []string{}
+				n = ""
+			} else {
+				cache.set(q, b, imgs, n, 10*time.Minute)
+			}
 		}
 	}
 
@@ -162,29 +256,50 @@ func handleIndex(w http.ResponseWriter, r *http.Request) {
 
 func handleProxy(w http.ResponseWriter, r *http.Request) {
 	u := r.URL.Query().Get("u")
-	if !strings.Contains(u, "i.pinimg.com") {
-		http.Error(w, "Forbidden", http.StatusForbidden)
+	parsedURL, err := url.Parse(u)
+	if err != nil {
+		log.Printf("[SECURITY] Failed to parse proxy target URL %q: %v", u, err)
+		http.Error(w, "Invalid URL", http.StatusBadRequest)
 		return
 	}
 
-	req, err := http.NewRequest("GET", u, nil)
+	if parsedURL.Scheme != "https" {
+		log.Printf("[SECURITY] Rejected proxy attempt with non-https scheme: %q from %s", parsedURL.Scheme, r.RemoteAddr)
+		http.Error(w, "Forbidden scheme", http.StatusForbidden)
+		return
+	}
+
+	if parsedURL.Host != "i.pinimg.com" {
+		log.Printf("[SECURITY] Rejected proxy attempt to unauthorized host: %q from %s", parsedURL.Host, r.RemoteAddr)
+		http.Error(w, "Forbidden host", http.StatusForbidden)
+		return
+	}
+
+	targetURL := &url.URL{
+		Scheme:   "https",
+		Host:     "i.pinimg.com",
+		Path:     parsedURL.Path,
+		RawQuery: parsedURL.RawQuery,
+	}
+
+	req, err := http.NewRequest("GET", targetURL.String(), nil)
 	if err != nil {
+		log.Printf("[ERROR] Failed to create proxy request for URL %q: %v", targetURL.String(), err)
 		http.Error(w, "Bad Gateway", http.StatusBadGateway)
 		return
 	}
 	req.Header.Set("User-Agent", "Mozilla/5.0")
 
-	client := &http.Client{
-		Timeout: 5 * time.Second,
-	}
-	resp, err := client.Do(req)
+	resp, err := proxyClient.Do(req)
 	if err != nil {
+		log.Printf("[ERROR] Proxy request failed for URL %q: %v", targetURL.String(), err)
 		http.Error(w, "Bad Gateway", http.StatusBadGateway)
 		return
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
+		log.Printf("[ERROR] Proxy response returned non-OK status: %d for URL %q", resp.StatusCode, targetURL.String())
 		http.Error(w, "Bad Gateway", http.StatusBadGateway)
 		return
 	}
@@ -194,22 +309,32 @@ func handleProxy(w http.ResponseWriter, r *http.Request) {
 		contentType = "image/jpeg"
 	}
 
+	if !strings.HasPrefix(contentType, "image/") {
+		log.Printf("[SECURITY] Rejected proxy response with non-image Content-Type: %q", contentType)
+		http.Error(w, "Forbidden Content-Type", http.StatusForbidden)
+		return
+	}
+
 	w.Header().Set("Content-Type", contentType)
+	w.Header().Set("Cache-Control", "public, max-age=31536000")
 	w.WriteHeader(http.StatusOK)
 	_, _ = io.Copy(w, resp.Body)
 }
 
 func main() {
-	http.HandleFunc("/", handleIndex)
-	http.HandleFunc("/proxy", handleProxy)
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", handleIndex)
+	mux.HandleFunc("/proxy", handleProxy)
+
+	handler := secureHeaders(mux)
 
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "5005"
 	}
 
-	fmt.Printf("Server starting on port %s...\n", port)
-	if err := http.ListenAndServe("0.0.0.0:"+port, nil); err != nil {
-		panic(err)
+	log.Printf("Server starting on port %s...\n", port)
+	if err := http.ListenAndServe("0.0.0.0:"+port, handler); err != nil {
+		log.Fatalf("Server failed to start: %v", err)
 	}
 }
