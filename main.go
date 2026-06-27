@@ -234,20 +234,23 @@ func handleIndex(w http.ResponseWriter, r *http.Request) {
 	var imgHTMLBuilder strings.Builder
 	for _, img := range imgs {
 		escapedImg := urlQuote(img)
-		imgHTMLBuilder.WriteString(fmt.Sprintf(`<a href="/proxy?u=%s"><img src="/proxy?u=%s" style="width:100%%;margin-bottom:1em" loading="lazy"></a>`, escapedImg, escapedImg))
+		imgHTMLBuilder.WriteString(`<a href="/proxy?u=`)
+		imgHTMLBuilder.WriteString(escapedImg)
+		imgHTMLBuilder.WriteString(`"><img src="/proxy?u=`)
+		imgHTMLBuilder.WriteString(escapedImg)
+		imgHTMLBuilder.WriteString(`" style="width:100%;margin-bottom:1em" loading="lazy"></a>`)
 	}
 	imgHTML := imgHTMLBuilder.String()
 
 	var nextHTML string
 	if n != "" {
-		nextHTML = fmt.Sprintf(`<a href="/?q=%s&b=%s" style="color:#fff;display:block;padding:2em">Next</a>`, urlQuote(q), urlQuote(n))
+		nextHTML = `<a href="/?q=` + urlQuote(q) + `&b=` + urlQuote(n) + `" style="color:#fff;display:block;padding:2em">Next</a>`
 	}
 
 	escapedQ := html.EscapeString(q)
 
-	resHTML := strings.ReplaceAll(T, "{{q}}", escapedQ)
-	resHTML = strings.ReplaceAll(resHTML, "{{imgs}}", imgHTML)
-	resHTML = strings.ReplaceAll(resHTML, "{{next_btn}}", nextHTML)
+	replacer := strings.NewReplacer("{{q}}", escapedQ, "{{imgs}}", imgHTML, "{{next_btn}}", nextHTML)
+	resHTML := replacer.Replace(T)
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
