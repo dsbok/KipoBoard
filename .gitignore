@@ -1,0 +1,9 @@
+# Go binaries
+kipoboard
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out

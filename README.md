@@ -1,10 +1,10 @@
 # kipoboard
-Pinterest image search proxy.
+Pinterest image search proxy written in Go.
 ## Instance
 https://kipoboard.daniisaahir.com
 ## Local Setup
 ```bash
-python3 app.py
+go run main.go
 ```
 ## Compose
 ```yaml

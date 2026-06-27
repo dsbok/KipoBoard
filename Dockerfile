@@ -1,9 +1,14 @@
-FROM python:3.12-alpine
-
+# Build stage
+FROM golang:1.22-alpine AS builder
 WORKDIR /app
+COPY go.mod ./
+COPY main.go ./
+RUN CGO_ENABLED=0 GOOS=linux go build -o kipoboard main.go
 
-COPY app.py .
-
+# Final stage
+FROM alpine:3.19
+RUN apk --no-cache add ca-certificates
+WORKDIR /app
+COPY --from=builder /app/kipoboard .
 EXPOSE 5005
-
-CMD ["python", "app.py"]
+CMD ["./kipoboard"]
