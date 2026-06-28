@@ -1,9 +1,10 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
-	"html"
+	"html/template"
 	"io"
 	"log"
 	"net"
@@ -15,15 +16,21 @@ import (
 	"time"
 )
 
-const T = `<head><meta name="viewport" content="width=device-width,initial-scale=1"><style>
+var tmpl = template.Must(template.New("index").Parse(`<head><meta name="viewport" content="width=device-width,initial-scale=1"><style>
 body{background:#000;color:#fff;font-family:sans-serif;text-align:center;margin:0}
 .g{column-count:4;gap:1em;padding:0 1em} @media(max-width:800px){.g{column-count:2}}
 </style></head><body>
 <h2 style="margin:1em 0 0"><a href="/" style="color:#fff;text-decoration:none">kipoboard</a></h2>
-<form style="padding:1em"><input name="q" value="{{q}}" autofocus><input type="submit" value="Search"></form>
+<form style="padding:1em"><input name="q" value="{{.Query}}" autofocus><input type="submit" value="Search"></form>
 <div class="g">
-{{imgs}}
-</div>{{next_btn}}</body>`
+{{range .Images}}<a href="/proxy?u={{.}}"><img src="/proxy?u={{.}}" style="width:100%;margin-bottom:1em" loading="lazy"></a>{{end}}
+</div>{{if .NextBookmark}}<a href="/?q={{.Query}}&b={{.NextBookmark}}" style="color:#fff;display:block;padding:2em">Next</a>{{end}}</body>`))
+
+type PageData struct {
+	Query        string
+	Images       []string
+	NextBookmark string
+}
 
 var (
 	httpTransport = &http.Transport{
@@ -59,21 +66,27 @@ type searchCache struct {
 	store map[string]cachedSearch
 }
 
-func newSearchCache() *searchCache {
+func newSearchCache(ctx context.Context) *searchCache {
 	c := &searchCache{
 		store: make(map[string]cachedSearch),
 	}
 	go func() {
+		ticker := time.NewTicker(5 * time.Minute)
+		defer ticker.Stop()
 		for {
-			time.Sleep(5 * time.Minute)
-			c.mu.Lock()
-			now := time.Now()
-			for key, val := range c.store {
-				if now.After(val.expiry) {
-					delete(c.store, key)
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				c.mu.Lock()
+				now := time.Now()
+				for key, val := range c.store {
+					if now.After(val.expiry) {
+						delete(c.store, key)
+					}
 				}
+				c.mu.Unlock()
 			}
-			c.mu.Unlock()
 		}
 	}()
 	return c
@@ -101,7 +114,7 @@ func (c *searchCache) set(q, b string, urls []string, bookmark string, ttl time.
 	}
 }
 
-var cache = newSearchCache()
+var cache = newSearchCache(context.Background())
 
 func secureHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -140,7 +153,7 @@ func urlQuote(s string) string {
 	return strings.ReplaceAll(url.QueryEscape(s), "+", "%20")
 }
 
-func search(q, b string) ([]string, string, error) {
+func search(ctx context.Context, q, b string) ([]string, string, error) {
 	bookmarks := []string{}
 	if b != "" {
 		bookmarks = append(bookmarks, b)
@@ -167,7 +180,7 @@ func search(q, b string) ([]string, string, error) {
 		urlQuote(string(dataBytes)),
 	)
 
-	req, err := http.NewRequest("GET", pinterestURL, nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", pinterestURL, nil)
 	if err != nil {
 		return nil, "", err
 	}
@@ -221,40 +234,27 @@ func handleIndex(w http.ResponseWriter, r *http.Request) {
 		imgs, n, found = cache.get(q, b)
 		if !found {
 			var err error
-			imgs, n, err = search(q, b)
+			imgs, n, err = search(r.Context(), q, b)
 			if err != nil {
-				imgs = []string{}
-				n = ""
-			} else {
-				cache.set(q, b, imgs, n, 10*time.Minute)
+				log.Printf("[ERROR] Search failed for query %q, bookmark %q: %v", q, b, err)
+				http.Error(w, "Search failed", http.StatusInternalServerError)
+				return
 			}
+			cache.set(q, b, imgs, n, 10*time.Minute)
 		}
 	}
 
-	var imgHTMLBuilder strings.Builder
-	for _, img := range imgs {
-		escapedImg := urlQuote(img)
-		imgHTMLBuilder.WriteString(`<a href="/proxy?u=`)
-		imgHTMLBuilder.WriteString(escapedImg)
-		imgHTMLBuilder.WriteString(`"><img src="/proxy?u=`)
-		imgHTMLBuilder.WriteString(escapedImg)
-		imgHTMLBuilder.WriteString(`" style="width:100%;margin-bottom:1em" loading="lazy"></a>`)
+	data := PageData{
+		Query:        q,
+		Images:       imgs,
+		NextBookmark: n,
 	}
-	imgHTML := imgHTMLBuilder.String()
-
-	var nextHTML string
-	if n != "" {
-		nextHTML = `<a href="/?q=` + urlQuote(q) + `&b=` + urlQuote(n) + `" style="color:#fff;display:block;padding:2em">Next</a>`
-	}
-
-	escapedQ := html.EscapeString(q)
-
-	replacer := strings.NewReplacer("{{q}}", escapedQ, "{{imgs}}", imgHTML, "{{next_btn}}", nextHTML)
-	resHTML := replacer.Replace(T)
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(resHTML))
+	if err := tmpl.Execute(w, data); err != nil {
+		log.Printf("[ERROR] Template execution failed: %v", err)
+	}
 }
 
 func handleProxy(w http.ResponseWriter, r *http.Request) {
@@ -285,7 +285,7 @@ func handleProxy(w http.ResponseWriter, r *http.Request) {
 		RawQuery: parsedURL.RawQuery,
 	}
 
-	req, err := http.NewRequest("GET", targetURL.String(), nil)
+	req, err := http.NewRequestWithContext(r.Context(), "GET", targetURL.String(), nil)
 	if err != nil {
 		log.Printf("[ERROR] Failed to create proxy request for URL %q: %v", targetURL.String(), err)
 		http.Error(w, "Bad Gateway", http.StatusBadGateway)
