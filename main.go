@@ -21,14 +21,28 @@ body{background:#000;color:#fff;font-family:sans-serif;text-align:center;margin:
 .g{column-count:4;gap:1em;padding:0 1em} @media(max-width:800px){.g{column-count:2}}
 </style></head><body>
 <h2 style="margin:1em 0 0"><a href="/" style="color:#fff;text-decoration:none">kipoboard</a></h2>
-<form style="padding:1em"><input name="q" value="{{.Query}}" autofocus><input type="submit" value="Search"></form>
+<form action="/search/pins/" style="padding:1em"><input name="q" value="{{.Query}}" autofocus><input type="submit" value="Search"></form>
 <div class="g">
-{{range .Images}}<a href="/proxy?u={{.}}"><img src="/proxy?u={{.}}" style="width:100%;margin-bottom:1em" loading="lazy"></a>{{end}}
-</div>{{if .NextBookmark}}<a href="/?q={{.Query}}&b={{.NextBookmark}}" style="color:#fff;display:block;padding:2em">Next</a>{{end}}</body>`))
+{{range .Pins}}<a href="/pin/{{.ID}}/"><img src="/proxy?u={{.URL}}" style="width:100%;margin-bottom:1em" loading="lazy"></a>{{end}}
+</div>{{if .NextBookmark}}<a href="/search/pins/?q={{.Query}}&b={{.NextBookmark}}" style="color:#fff;display:block;padding:2em">Next</a>{{end}}</body>`))
+
+var pinTmpl = template.Must(template.New("pin").Parse(`<head><meta name="viewport" content="width=device-width,initial-scale=1"><style>
+body{background:#000;color:#fff;font-family:sans-serif;text-align:center;margin:0}
+</style></head><body>
+<h2 style="margin:1em 0 0"><a href="/" style="color:#fff;text-decoration:none">kipoboard</a></h2>
+<div style="padding:1em;max-width:800px;margin:0 auto;">
+<img src="/proxy?u={{.}}" style="width:100%;" loading="lazy">
+</div>
+</body>`))
+
+type Pin struct {
+	ID  string
+	URL string
+}
 
 type PageData struct {
 	Query        string
-	Images       []string
+	Pins         []Pin
 	NextBookmark string
 }
 
@@ -56,7 +70,7 @@ var (
 )
 
 type cachedSearch struct {
-	urls     []string
+	pins     []Pin
 	bookmark string
 	expiry   time.Time
 }
@@ -92,7 +106,7 @@ func newSearchCache(ctx context.Context) *searchCache {
 	return c
 }
 
-func (c *searchCache) get(q, b string) ([]string, string, bool) {
+func (c *searchCache) get(q, b string) ([]Pin, string, bool) {
 	key := q + "\x00" + b
 	c.mu.RLock()
 	defer c.mu.RUnlock()
@@ -100,15 +114,15 @@ func (c *searchCache) get(q, b string) ([]string, string, bool) {
 	if !exists || time.Now().After(item.expiry) {
 		return nil, "", false
 	}
-	return item.urls, item.bookmark, true
+	return item.pins, item.bookmark, true
 }
 
-func (c *searchCache) set(q, b string, urls []string, bookmark string, ttl time.Duration) {
+func (c *searchCache) set(q, b string, pins []Pin, bookmark string, ttl time.Duration) {
 	key := q + "\x00" + b
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.store[key] = cachedSearch{
-		urls:     urls,
+		pins:     pins,
 		bookmark: bookmark,
 		expiry:   time.Now().Add(ttl),
 	}
@@ -140,6 +154,7 @@ type PinterestResponse struct {
 	ResourceResponse struct {
 		Data struct {
 			Results []struct {
+				ID     string `json:"id"`
 				Images map[string]struct {
 					URL string `json:"url"`
 				} `json:"images"`
@@ -149,11 +164,21 @@ type PinterestResponse struct {
 	} `json:"resource_response"`
 }
 
+type PinResourceResponse struct {
+	ResourceResponse struct {
+		Data struct {
+			Images map[string]struct {
+				URL string `json:"url"`
+			} `json:"images"`
+		} `json:"data"`
+	} `json:"resource_response"`
+}
+
 func urlQuote(s string) string {
 	return strings.ReplaceAll(url.QueryEscape(s), "+", "%20")
 }
 
-func search(ctx context.Context, q, b string) ([]string, string, error) {
+func search(ctx context.Context, q, b string) ([]Pin, string, error) {
 	bookmarks := []string{}
 	if b != "" {
 		bookmarks = append(bookmarks, b)
@@ -202,20 +227,56 @@ func search(ctx context.Context, q, b string) ([]string, string, error) {
 		return nil, "", err
 	}
 
-	var urls []string
+	var pins []Pin
 	for _, result := range pResp.ResourceResponse.Data.Results {
-		if result.Images != nil {
+		if result.Images != nil && result.ID != "" {
 			if orig, ok := result.Images["orig"]; ok && orig.URL != "" {
-				urls = append(urls, orig.URL)
+				pins = append(pins, Pin{ID: result.ID, URL: orig.URL})
 			}
 		}
 	}
 
-	return urls, pResp.ResourceResponse.Bookmark, nil
+	return pins, pResp.ResourceResponse.Bookmark, nil
+}
+
+func fetchPin(ctx context.Context, id string) (string, error) {
+	options := fmt.Sprintf(`{"options":{"id":"%s","field_set_key":"detailed"}}`, id)
+	src := "/pin/" + id + "/"
+	pinterestURL := fmt.Sprintf("https://www.pinterest.com/resource/PinResource/get/?source_url=%s&data=%s",
+		urlQuote(src),
+		urlQuote(options),
+	)
+
+	req, err := http.NewRequestWithContext(ctx, "GET", pinterestURL, nil)
+	if err != nil {
+		return "", err
+	}
+
+	req.Header.Set("User-Agent", "Mozilla/5.0")
+	req.Header.Set("X-Requested-With", "XMLHttpRequest")
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("X-Pinterest-AppState", "active")
+	req.Header.Set("X-Pinterest-PWS-Handler", "www/pin/[id].js")
+
+	resp, err := pinterestClient.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	var pResp PinResourceResponse
+	if err := json.NewDecoder(resp.Body).Decode(&pResp); err != nil {
+		return "", err
+	}
+
+	if orig, ok := pResp.ResourceResponse.Data.Images["orig"]; ok && orig.URL != "" {
+		return orig.URL, nil
+	}
+	return "", fmt.Errorf("image not found")
 }
 
 func handleIndex(w http.ResponseWriter, r *http.Request) {
-	if r.URL.Path != "/" {
+	if r.URL.Path != "/" && r.URL.Path != "/search/pins/" {
 		http.Error(w, "Not Found", http.StatusNotFound)
 		return
 	}
@@ -227,26 +288,26 @@ func handleIndex(w http.ResponseWriter, r *http.Request) {
 	}
 	b := r.URL.Query().Get("b")
 
-	var imgs []string
+	var pins []Pin
 	var n string
 	if q != "" {
 		var found bool
-		imgs, n, found = cache.get(q, b)
+		pins, n, found = cache.get(q, b)
 		if !found {
 			var err error
-			imgs, n, err = search(r.Context(), q, b)
+			pins, n, err = search(r.Context(), q, b)
 			if err != nil {
 				log.Printf("[ERROR] Search failed for query %q, bookmark %q: %v", q, b, err)
 				http.Error(w, "Search failed", http.StatusInternalServerError)
 				return
 			}
-			cache.set(q, b, imgs, n, 10*time.Minute)
+			cache.set(q, b, pins, n, 10*time.Minute)
 		}
 	}
 
 	data := PageData{
 		Query:        q,
-		Images:       imgs,
+		Pins:         pins,
 		NextBookmark: n,
 	}
 
@@ -254,6 +315,28 @@ func handleIndex(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	if err := tmpl.Execute(w, data); err != nil {
 		log.Printf("[ERROR] Template execution failed: %v", err)
+	}
+}
+
+func handlePin(w http.ResponseWriter, r *http.Request) {
+	parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
+	if len(parts) < 2 || parts[0] != "pin" {
+		http.Error(w, "Not Found", http.StatusNotFound)
+		return
+	}
+	pinID := parts[1]
+
+	imgURL, err := fetchPin(r.Context(), pinID)
+	if err != nil || imgURL == "" {
+		log.Printf("[ERROR] Failed to fetch pin %q: %v", pinID, err)
+		http.Error(w, "Failed to fetch pin", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	if err := pinTmpl.Execute(w, imgURL); err != nil {
+		log.Printf("[ERROR] Pin template execution failed: %v", err)
 	}
 }
 
@@ -327,6 +410,8 @@ func handleProxy(w http.ResponseWriter, r *http.Request) {
 func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", handleIndex)
+	mux.HandleFunc("/search/pins/", handleIndex)
+	mux.HandleFunc("/pin/", handlePin)
 	mux.HandleFunc("/proxy", handleProxy)
 
 	handler := secureHeaders(mux)
