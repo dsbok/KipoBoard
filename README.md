@@ -1,7 +1,5 @@
 # kipoboard
-Pinterest image search proxy written in Go.
-## Instance
-https://kipoboard.daniisaahir.com
+Pinterest image search proxy.
 ## Local Setup
 ```bash
 go run main.go
