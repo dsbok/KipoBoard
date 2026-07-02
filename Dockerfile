@@ -22,7 +22,7 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
         -ldflags="-s -w" \
         -o /out/kipoboard .
 
-FROM alpine:3.22 AS certs
+FROM alpine:3.24 AS certs
 
 RUN apk --no-cache add ca-certificates
 
