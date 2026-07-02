@@ -1,0 +1,16 @@
+services:
+  kipoboard:
+    image: ghcr.io/dsbok/kipoboard:latest
+    container_name: kipoboard
+    restart: unless-stopped
+    user: "1000:1000"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    dns:
+      - 1.1.1.1
+      - 1.0.0.1
+    read_only: true
+    ports:
+      - "5005:5005"
