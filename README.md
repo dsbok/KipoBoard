@@ -4,7 +4,7 @@ Pinterest image search proxy.
 ```bash
 go run main.go
 ```
-## Docker Run
+## Docker
 ```yaml
-docker run --name kipoboard --restart unless-stopped -u 1000:1000 --security-opt no-new-privileges:true --cap-drop ALL --dns 1.1.1.1 --dns 1.0.0.1 --read-only -p 5005:5005 ghcr.io/dsbok/kipoboard:latest
+docker compose up -d
 ```
