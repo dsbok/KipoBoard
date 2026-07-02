@@ -6,13 +6,7 @@ https://kipoboard.daniisaahir.com
 ```bash
 go run main.go
 ```
-## Compose
+## Docker
 ```yaml
-services:
-  kipoboard:
-    image: ghcr.io/dsbok/kipoboard:latest
-    container_name: kipoboard
-    restart: unless-stopped
-    ports:
-      - "5005:5005"
+docker compose up -d
 ```
